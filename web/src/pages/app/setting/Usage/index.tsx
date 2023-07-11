@@ -1,6 +1,6 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Avatar, Button, useColorMode } from "@chakra-ui/react";
+import { Avatar, Button, Center, Spinner, useColorMode } from "@chakra-ui/react";
 import { useQuery } from "@tanstack/react-query";
 import clsx from "clsx";
 import {
@@ -16,42 +16,39 @@ import {
 import ChargeButton from "@/components/ChargeButton";
 import { CostIcon, ExpendIcon, RechargeIcon } from "@/components/CommonIcon";
 import DateRangePicker from "@/components/DateRangePicker";
-import { formatDate, formatPrice, hidePhoneNumber } from "@/utils/format";
+import { formatDate, formatOriginalPrice, formatPrice, hidePhoneNumber } from "@/utils/format";
+import { getAvatarUrl } from "@/utils/getAvatarUrl";
 
 import { AccountControllerGetChargeOrderAmount } from "@/apis/v1/accounts";
 import { BillingControllerGetExpense, BillingControllerGetExpenseByDay } from "@/apis/v1/billings";
 import useGlobalStore from "@/pages/globalStore";
 import { useAccountQuery } from "@/pages/home/service";
 
-const DEFAULT_QUERY_DATA = {
-  appid: [],
-  startTime: "",
-  endTime: "",
-  page: 1,
-  pageSize: 10,
-  state: "",
-};
+const DATA_DURATION = 6 * 24 * 60 * 60 * 1000;
 
 export default function Usage() {
-  const { userInfo } = useGlobalStore((state) => state);
-  const { data: accountRes } = useAccountQuery();
   const { t } = useTranslation();
   const darkMode = useColorMode().colorMode === "dark";
-
   const [startTime, setStartTime] = React.useState<Date | null>(
-    new Date(new Date().getTime() - 6 * 24 * 60 * 60 * 1000),
+    new Date(new Date().getTime() - DATA_DURATION),
   );
+
   const [endTime, setEndTime] = React.useState<Date | null>(new Date());
-  const [queryData, setQueryData] = React.useState(DEFAULT_QUERY_DATA);
 
-  const { data: billingAmountRes } = useQuery(["billing", queryData], async () => {
-    return BillingControllerGetExpense({
-      startTime: startTime?.toISOString(),
-      endTime: endTime?.toISOString(),
-    });
-  });
+  const { userInfo } = useGlobalStore((state) => state);
+  const { data: accountRes } = useAccountQuery();
 
-  const { data: chargeOrderAmountRes } = useQuery(
+  const { data: billingAmountRes, isLoading: billLoading } = useQuery(
+    ["billing", startTime, endTime],
+    async () => {
+      return BillingControllerGetExpense({
+        startTime: startTime?.toISOString(),
+        endTime: endTime?.toISOString(),
+      });
+    },
+  );
+
+  const { data: chargeOrderAmountRes, isLoading: chargeLoading } = useQuery(
     ["chargeOrderAmount", startTime, endTime],
     async () => {
       return AccountControllerGetChargeOrderAmount({
@@ -61,7 +58,7 @@ export default function Usage() {
     },
   );
 
-  const { data: billingAmountByDayRes } = useQuery(
+  const { data: billingAmountByDayRes, isLoading: billingLoading } = useQuery(
     ["billingByDay", startTime, endTime],
     async () => {
       return BillingControllerGetExpenseByDay({
@@ -72,7 +69,7 @@ export default function Usage() {
   );
 
   const chartData = ((billingAmountByDayRes?.data as Array<any>) || []).map((item) => ({
-    totalAmount: item.totalAmount / 100,
+    totalAmount: item.totalAmount,
     date: formatDate(item.day).slice(5, 10),
   }));
 
@@ -88,7 +85,6 @@ export default function Usage() {
           endTime={endTime}
           setStartTime={setStartTime}
           setEndTime={setEndTime}
-          setQueryData={setQueryData}
         />
       </div>
       <div className="flex pb-6 pl-8">
@@ -98,7 +94,13 @@ export default function Usage() {
             <div className="flex items-center justify-between pt-3 text-lg">
               <span>{hidePhoneNumber(userInfo?.phone || "")}</span>
               <span className="flex items-center">
-                {userInfo?.username} <Avatar className="ml-2" width={9} height={9} src="" />
+                {userInfo?.username}{" "}
+                <Avatar
+                  className="ml-2"
+                  width={9}
+                  height={9}
+                  src={getAvatarUrl(userInfo?._id || "")}
+                />
               </span>
             </div>
             <div className="flex items-end justify-between pb-5">
@@ -130,7 +132,11 @@ export default function Usage() {
               </div>
               <div className="flex w-full justify-center pt-3">{t("Expenses")}</div>
               <div className="flex w-full justify-center pt-3 text-xl">
-                {formatPrice(billingAmountRes?.data as number)}
+                {billLoading ? (
+                  <Spinner size={"sm"} />
+                ) : (
+                  formatOriginalPrice(billingAmountRes?.data as number)
+                )}
               </div>
             </div>
             <div
@@ -146,7 +152,11 @@ export default function Usage() {
               </div>
               <div className="flex w-full justify-center pt-3">{t("ChargeNow")}</div>
               <div className="flex w-full justify-center pt-3 text-xl">
-                {formatPrice(chargeOrderAmountRes?.data as number)}
+                {chargeLoading ? (
+                  <Spinner size={"sm"} />
+                ) : (
+                  formatPrice(chargeOrderAmountRes?.data as number)
+                )}
               </div>
             </div>
           </div>
@@ -154,21 +164,29 @@ export default function Usage() {
       </div>
       <span className="pl-8">{t("SettingPanel.CostTrend")}</span>
       <div className="mt-3 h-[160px] w-[660px] pl-8">
-        <ResponsiveContainer width={"100%"} height={"100%"}>
-          <AreaChart data={chartData} margin={{ left: -24 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="date" axisLine={false} tickLine={false} />
-            <YAxis axisLine={false} tickLine={false} />
-            <Tooltip formatter={(value) => ["￥" + Number(value).toFixed(2), t("Expenses")]} />
-            <Area
-              type="monotone"
-              dataKey="totalAmount"
-              stroke="#66CBCA"
-              fill="#E6F6F6"
-              strokeWidth={2}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+        {billingLoading ? (
+          <Center className="h-full w-full">
+            <Spinner />
+          </Center>
+        ) : (
+          <ResponsiveContainer width={"100%"} height={"100%"}>
+            <AreaChart data={chartData} margin={{ left: -24 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="date" axisLine={false} tickLine={false} />
+              <YAxis axisLine={false} tickLine={false} />
+              <Tooltip
+                formatter={(value) => [formatOriginalPrice(Number(value), 3), t("Expenses")]}
+              />
+              <Area
+                type="monotone"
+                dataKey="totalAmount"
+                stroke="#66CBCA"
+                fill="#E6F6F6"
+                strokeWidth={2}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
       </div>
     </div>
   );
