@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import useFunctionStore from "./store";
 
+import { TFunction } from "@/apis/typing";
 import {
   FunctionControllerCompile,
   FunctionControllerCreate,
@@ -71,6 +72,7 @@ export const useCreateFunctionMutation = () => {
         if (!data.error) {
           queryClient.invalidateQueries(queryKeys.useFunctionListQuery);
           store.setCurrentFunction(data.data);
+          store.setRecentFunctionList([data.data as TFunction, ...store.recentFunctionList]);
         }
       },
     },
@@ -133,7 +135,13 @@ export const useDeleteFunctionMutation = () => {
       onSuccess(data: any) {
         if (!data.error) {
           queryClient.invalidateQueries(queryKeys.useFunctionListQuery);
-          store.setCurrentFunction({});
+          if (store.currentFunction?._id === data.data._id) {
+            const newFunction = store.recentFunctionList[0] || store.allFunctionList[0] || {};
+            store.setCurrentFunction(newFunction);
+          }
+          store.setRecentFunctionList(
+            store.recentFunctionList.filter((item) => item._id !== data.data._id),
+          );
           functionCache.removeCache(data?.data?._id);
         }
       },

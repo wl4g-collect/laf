@@ -22,10 +22,10 @@ export default function TemplateLayout() {
       <div
         className={clsx(
           "sticky top-0 z-50 flex justify-center",
-          darkMode ? "" : "border-b border-[#E4E9EE] bg-[#F8FAFB]",
+          darkMode ? "bg-[#1A202C]" : "border-b border-[#E4E9EE] bg-[#F8FAFB]",
         )}
       >
-        <Header width="max-w-screen-xl" />
+        <Header className="max-w-screen-xl" />
       </div>
       <div className="overflow-auto">
         <div

@@ -2,8 +2,11 @@
  * cloud functions list sidebar
  ***************************/
 import { useTranslation } from "react-i18next";
-import { AddIcon, DeleteIcon } from "@chakra-ui/icons";
+import { AddIcon } from "@chakra-ui/icons";
+import { useColorMode } from "@chakra-ui/react";
+import clsx from "clsx";
 
+import { RecycleDeleteIcon } from "@/components/CommonIcon";
 import ConfirmButton from "@/components/ConfirmButton";
 import EmptyBox from "@/components/EmptyBox";
 import FileTypeIcon from "@/components/FileTypeIcon";
@@ -14,19 +17,15 @@ import Panel from "@/components/Panel";
 import SectionList from "@/components/SectionList";
 
 import AddPolicyModal from "../mods/AddPolicyModal";
-import { useDeletePolicyMutation, usePolicyListQuery } from "../service";
+import { useDeletePolicyMutation } from "../service";
 import useDBMStore from "../store";
-export default function PolicyListPanel() {
+export default function PolicyListPanel(props: { policyList: any }) {
+  const { policyList } = props;
   const { t } = useTranslation();
   const deletePolicyMutation = useDeletePolicyMutation();
   const store = useDBMStore((state) => state);
-  const policyQuery = usePolicyListQuery((data) => {
-    if (data.data.length === 0) {
-      store.setCurrentPolicy(undefined);
-    } else if (store.currentPolicy === undefined) {
-      store.setCurrentPolicy(data?.data[0]);
-    }
-  });
+  const darkMode = useColorMode().colorMode === "dark";
+
   return (
     <Panel
       className="min-w-[200px]"
@@ -45,21 +44,28 @@ export default function PolicyListPanel() {
         ]}
       />
       <div style={{ flexGrow: 1, overflowY: "auto", overflowX: "hidden" }}>
-        {policyQuery?.data?.data?.length ? (
+        {policyList?.data?.length ? (
           <SectionList>
-            {policyQuery?.data?.data.map((item: any) => {
+            {policyList?.data.map((item: any) => {
               return (
                 <SectionList.Item
                   isActive={
                     store.currentShow === "Policy" && item?._id === store.currentPolicy?._id
                   }
+                  className={clsx(
+                    "group h-7 hover:!text-primary-700",
+                    darkMode ? "text-grayIron-200" : " text-grayIron-700",
+                    store.currentShow === "Policy" &&
+                      item?._id === store.currentPolicy?._id &&
+                      "!text-primary-700",
+                  )}
                   key={item?._id}
                   onClick={() => {
                     store.setCurrentPolicy(item);
                   }}
                 >
                   <div className="group flex w-full items-center justify-between">
-                    <div className="overflow-hidden text-ellipsis whitespace-nowrap font-semibold leading-loose">
+                    <div className="overflow-hidden text-ellipsis whitespace-nowrap font-medium leading-loose">
                       <FileTypeIcon type="policy" />
                       <span className="ml-2 text-base">{item.name}</span>
                     </div>
@@ -79,7 +85,7 @@ export default function PolicyListPanel() {
                           bodyText={t("CollectionPanel.ConformDelete")}
                         >
                           <IconText
-                            icon={<DeleteIcon />}
+                            icon={<RecycleDeleteIcon fontSize={16} />}
                             text={t("Delete")}
                             className="hover:!text-error-600"
                           />

@@ -1,4 +1,3 @@
-import { DeleteIcon } from "@chakra-ui/icons";
 import {
   Button,
   ButtonGroup,
@@ -9,10 +8,11 @@ import {
 } from "@chakra-ui/react";
 import { t } from "i18next";
 
+import { RecycleDeleteIcon } from "@/components/CommonIcon";
 import IconWrap from "@/components/IconWrap";
 
 export default function DeleteButton(props: { data: any; deleteMethod: any }) {
-  const { isOpen, onOpen, onClose } = useDisclosure();
+  const { isOpen, onToggle, onOpen, onClose } = useDisclosure();
   return (
     <>
       <Popover
@@ -28,11 +28,15 @@ export default function DeleteButton(props: { data: any; deleteMethod: any }) {
           tooltip={t("Delete").toString()}
           size={32}
           onClick={(event: any) => {
+            onToggle();
             event?.stopPropagation();
           }}
         >
           <PopoverTrigger>
-            <DeleteIcon fontSize={12} className="align-middle group-hover/icon:text-error-500" />
+            <RecycleDeleteIcon
+              fontSize={16}
+              className="align-middle group-hover/icon:text-error-500"
+            />
           </PopoverTrigger>
         </IconWrap>
         <PopoverContent p="2" maxWidth={130}>

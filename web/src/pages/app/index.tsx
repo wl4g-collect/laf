@@ -5,16 +5,14 @@ import useGlobalStore from "../globalStore";
 import SideBar from "./mods/SideBar";
 import DatabasePage from "./database";
 import FunctionPage from "./functions";
-import LogsPage from "./logs";
 import StoragePage from "./storages";
 
 function AppDetail() {
   const { visitedViews, currentPageId } = useGlobalStore();
-
   return (
     <>
       <SideBar />
-      <div className="m-2" style={{ marginLeft: SideBarWidth, height: "calc(100vh - 1rem)" }}>
+      <div className="m-1" style={{ marginLeft: SideBarWidth, height: "calc(100vh - 0.5rem)" }}>
         {[
           {
             pageId: Pages.function,
@@ -27,10 +25,6 @@ function AppDetail() {
           {
             pageId: Pages.storage,
             component: StoragePage,
-          },
-          {
-            pageId: Pages.logs,
-            component: LogsPage,
           },
         ].map((item) =>
           visitedViews.includes(item.pageId) ? (

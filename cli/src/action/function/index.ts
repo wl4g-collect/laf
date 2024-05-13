@@ -20,6 +20,8 @@ import { FUNCTION_SCHEMA_DIRECTORY } from '../../common/constant'
 import { confirm } from '../../common/prompts'
 import { AppSchema } from '../../schema/app'
 import { FunctionSchema } from '../../schema/function'
+import * as urlencode from 'urlencode'
+import { lstatSync } from 'fs'
 
 export async function create(
   funcName: string,
@@ -49,7 +51,7 @@ export async function list() {
   const table = new Table({
     head: ['name', 'desc', 'websocket', 'methods', 'tags', 'updatedAt'],
   })
-  for (let func of funcs) {
+  for (const func of funcs) {
     table.push([
       func.name,
       func.description,
@@ -64,7 +66,7 @@ export async function list() {
 
 export async function del(funcName: string) {
   const appSchema = AppSchema.read()
-  await functionControllerRemove(appSchema.appid, funcName)
+  await functionControllerRemove(appSchema.appid, urlencode(funcName))
   if (FunctionSchema.exist(funcName)) {
     FunctionSchema.delete(funcName)
   }
@@ -77,10 +79,10 @@ export async function del(funcName: string) {
 
 async function pull(funcName: string) {
   const appSchema = AppSchema.read()
-  const func = await functionControllerFindOne(appSchema.appid, funcName)
+  const func = await functionControllerFindOne(appSchema.appid, urlencode(funcName))
   const functionSchema: FunctionSchema = {
     name: func.name,
-    description: func.description,
+    desc: func.desc,
     methods: func.methods,
     tags: func.tags,
   }
@@ -93,14 +95,14 @@ export async function pullAll(options: { force: boolean }) {
   const appSchema = AppSchema.read()
   const funcs = await functionControllerFindAll(appSchema.appid)
   const serverFuncMap = new Map<string, boolean>()
-  for (let func of funcs) {
+  for (const func of funcs) {
     await pull(func.name)
     console.log(`${getEmoji('✅')} function ${func.name} pulled`)
     serverFuncMap.set(func.name, true)
   }
   // remove remote not exist function
   const localFuncs = getLocalFuncs()
-  for (let item of localFuncs) {
+  for (const item of localFuncs) {
     if (!serverFuncMap.has(item)) {
       if (options.force) {
         removeFunction(item)
@@ -113,7 +115,6 @@ export async function pullAll(options: { force: boolean }) {
         }
       }
     }
-
   }
 }
 
@@ -130,7 +131,7 @@ async function push(funcName: string, isCreate: boolean) {
   if (isCreate) {
     const createDto: CreateFunctionDto = {
       name: funcName,
-      description: funcSchema.description || '',
+      description: funcSchema.desc || '',
       methods: funcSchema.methods as any,
       code,
       tags: funcSchema.tags,
@@ -138,12 +139,12 @@ async function push(funcName: string, isCreate: boolean) {
     await functionControllerCreate(appSchema.appid, createDto)
   } else {
     const updateDto: UpdateFunctionDto = {
-      description: funcSchema.description || '',
+      description: funcSchema.desc || '',
       methods: funcSchema.methods as any,
       code,
       tags: funcSchema.tags,
     }
-    await functionControllerUpdate(appSchema.appid, funcName, updateDto)
+    await functionControllerUpdate(appSchema.appid, urlencode(funcName), updateDto)
   }
 }
 
@@ -151,30 +152,30 @@ export async function pushAll(options: { force: boolean }) {
   const appSchema = AppSchema.read()
   const serverFuncs = await functionControllerFindAll(appSchema.appid)
   const serverFuncMap = new Map<string, FunctionSchema>()
-  for (let func of serverFuncs) {
+  for (const func of serverFuncs) {
     serverFuncMap.set(func.name, func)
   }
   const localFuncs = getLocalFuncs()
-  for (let item of localFuncs) {
+  for (const item of localFuncs) {
     await push(item, !serverFuncMap.has(item))
     console.log(`${getEmoji('✅')} function ${item} pushed`)
   }
 
   const localFuncMap = new Map<string, boolean>()
-  for (let item of localFuncs) {
+  for (const item of localFuncs) {
     localFuncMap.set(item, true)
   }
 
   // delete server functions
-  for (let item of serverFuncs) {
+  for (const item of serverFuncs) {
     if (!localFuncMap.has(item.name)) {
       if (options.force) {
-        await functionControllerRemove(appSchema.appid, item.name)
+        await functionControllerRemove(appSchema.appid, urlencode(item.name))
         console.log(`${getEmoji('✅')} function ${item.name} deleted`)
       } else {
         const res = await confirm('confirm remove function ' + item.name + '?')
         if (res.value) {
-          await functionControllerRemove(appSchema.appid, item.name)
+          await functionControllerRemove(appSchema.appid, urlencode(item.name))
           console.log(`${getEmoji('✅')} function ${item.name} deleted`)
         } else {
           console.log(`${getEmoji('🎃')} cancel remove function ${item.name}`)
@@ -190,7 +191,7 @@ export async function pushOne(funcName: string) {
   const appSchema = AppSchema.read()
   const serverFuncs = await functionControllerFindAll(appSchema.appid)
   let isCreate = true
-  for (let func of serverFuncs) {
+  for (const func of serverFuncs) {
     if (func.name === funcName) {
       isCreate = false
       break
@@ -222,7 +223,7 @@ export async function exec(
     code,
   }
   const appSchema = AppSchema.read()
-  const func = await functionControllerCompile(appSchema.appid, funcName, compileDto)
+  const func = await functionControllerCompile(appSchema.appid, urlencode(funcName), compileDto)
 
   // transform headers json string to object. -H '{"Content-Type": "application/json"}'
   if (options.headers) {
@@ -274,19 +275,39 @@ async function printLog(appid: string, requestId: string) {
     page: '1',
     pageSize: '100',
   })
-  for (let log of data.list) {
+  for (const log of data.list) {
     console.log(`[${formatDate(log.createdAt)}] ${log.data}`)
   }
 }
 
-function getLocalFuncs() {
+function getLocalFuncs(): string[] {
   const funcDir = path.join(getBaseDir(), FUNCTION_SCHEMA_DIRECTORY)
-  const files = fs.readdirSync(funcDir)
-  const funcs = files.filter((file) => file.endsWith('.ts')).map((file) => file.replace('.ts', ''))
+  const funcs = getLocalFunction(funcDir, '')
   return funcs
 }
 
-function removeFunction(name: string) { 
+function getLocalFunction(dir: string, prefix: string): string[] {
+  const files = fs.readdirSync(dir)
+  const funcNames: string[] = []
+  files.forEach((file) => {
+    const filePath = path.join(dir, file)
+    const stat = lstatSync(filePath)
+    if (stat.isDirectory()) {
+      funcNames.push(...getLocalFunction(filePath, path.join(prefix || '', file)))
+    }
+    if (stat.isFile() && file.endsWith('.ts')) {
+      funcNames.push(
+        path
+          .join(prefix || '', file)
+          .replace(/\\/g, '/')
+          .replace(/\.ts$/, ''),
+      )
+    }
+  })
+  return funcNames
+}
+
+function removeFunction(name: string) {
   if (FunctionSchema.exist(name)) {
     FunctionSchema.delete(name)
   }

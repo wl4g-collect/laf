@@ -1,5 +1,10 @@
-import { request, RequestParams } from "../../util/request";
-import { BillingControllerFindAllParams, CalculatePriceDto } from "./data-contracts";
+import { request, RequestParams } from '../../util/request'
+import {
+  BillingControllerFindAllParams,
+  BillingControllerGetExpenseByDayParams,
+  BillingControllerGetExpenseParams,
+  CalculatePriceDto,
+} from './data-contracts'
 
 /**
  * No description
@@ -16,10 +21,50 @@ export async function billingControllerFindAll(
 ): Promise<any> {
   return request({
     url: `/v1/billings`,
-    method: "GET",
+    method: 'GET',
     params: query,
     ...configParams,
-  });
+  })
+}
+/**
+ * No description
+ *
+ * @tags Billing
+ * @name BillingControllerGetExpense
+ * @summary Get my total amount
+ * @request GET:/v1/billings/amount
+ * @secure
+ */
+export async function billingControllerGetExpense(
+  query: BillingControllerGetExpenseParams,
+  configParams: RequestParams = {},
+): Promise<any> {
+  return request({
+    url: `/v1/billings/amount`,
+    method: 'GET',
+    params: query,
+    ...configParams,
+  })
+}
+/**
+ * No description
+ *
+ * @tags Billing
+ * @name BillingControllerGetExpenseByDay
+ * @summary Get my total amount by day
+ * @request GET:/v1/billings/amounts
+ * @secure
+ */
+export async function billingControllerGetExpenseByDay(
+  query: BillingControllerGetExpenseByDayParams,
+  configParams: RequestParams = {},
+): Promise<any> {
+  return request({
+    url: `/v1/billings/amounts`,
+    method: 'GET',
+    params: query,
+    ...configParams,
+  })
 }
 /**
  * No description
@@ -35,10 +80,10 @@ export async function resourceControllerCalculatePrice(
 ): Promise<any> {
   return request({
     url: `/v1/resources/price`,
-    method: "POST",
+    method: 'POST',
     data: data,
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -51,9 +96,9 @@ export async function resourceControllerCalculatePrice(
 export async function resourceControllerGetResourceOptions(configParams: RequestParams = {}): Promise<any> {
   return request({
     url: `/v1/resources/resource-options`,
-    method: "GET",
+    method: 'GET',
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -69,9 +114,9 @@ export async function resourceControllerGetResourceOptionsByRegionId(
 ): Promise<any> {
   return request({
     url: `/v1/resources/resource-options/${regionId}`,
-    method: "GET",
+    method: 'GET',
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -84,7 +129,7 @@ export async function resourceControllerGetResourceOptionsByRegionId(
 export async function resourceControllerGetResourceBundles(configParams: RequestParams = {}): Promise<any> {
   return request({
     url: `/v1/resources/resource-bundles`,
-    method: "GET",
+    method: 'GET',
     ...configParams,
-  });
+  })
 }

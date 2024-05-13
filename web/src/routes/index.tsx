@@ -4,6 +4,9 @@ import AuthLayout from "@/layouts/Auth";
 import BasicLayout from "@/layouts/Basic";
 import FunctionLayout from "@/layouts/Function";
 import TemplateLayout from "@/layouts/Template";
+import useSiteSettingStore from "@/pages/siteSetting";
+import { useRoutes } from "react-router-dom";
+import { wrapUseRoutes } from "@sentry/react";
 
 const route404 = {
   path: "*",
@@ -45,6 +48,16 @@ const routes = [
     ],
   },
   {
+    path: "/bind",
+    auth: false,
+    children: [
+      {
+        path: "/bind/github",
+        element: () => import("@/pages/auth/bind/BindGitHub"),
+      },
+    ],
+  },
+  {
     path: "/",
     children: [
       {
@@ -75,23 +88,32 @@ const routes = [
         ],
       },
       {
-        path: "/market/templates/:pages",
+        path: "/collaboration",
+        children: [
+          {
+            path: "/collaboration/join",
+            element: () => import("@/pages/app/collaboration/Invited/index"),
+          },
+        ],
+      },
+      {
+        path: "/market/templates",
         element: <TemplateLayout />,
         auth: true,
         children: [
           {
-            path: "/market/templates/:pages",
+            path: "/market/templates/:templateId?",
             element: () => import("@/pages/functionTemplate"),
           },
         ],
       },
       {
-        path: "/market/templates/:pages/:templateId/edit",
+        path: "/market/templates/:templateId/edit",
         element: <TemplateLayout />,
         auth: true,
         children: [
           {
-            path: "/market/templates/:pages/:templateId/edit",
+            path: "/market/templates/:templateId/edit",
             element: () => import("@/pages/functionTemplate/CreateFuncTemplate"),
           },
         ],
@@ -127,7 +149,27 @@ function LazyElement(props: any) {
 }
 
 function dealRoutes(routesArr: any) {
+  const { siteSettings } = useSiteSettingStore();
   if (routesArr && Array.isArray(routesArr) && routesArr.length > 0) {
+    if (siteSettings.enable_web_promo_page?.value === "false") { 
+      for (let i = 0; i < routesArr.length; i++) {
+        const route = routesArr[i];
+        if (route.index) {
+          routesArr[i] = {
+            path: "/",
+            element: <BasicLayout />,
+            auth: true,
+            children: [
+              {
+                path: "/",
+                element: () => import("@/pages/home/index"),
+              },
+            ],
+          };
+        }
+      }
+    }
+
     routesArr.forEach((route) => {
       if (route.element && typeof route.element == "function") {
         const importFunc = route.element;
@@ -139,6 +181,13 @@ function dealRoutes(routesArr: any) {
     });
   }
 }
-dealRoutes(routes);
 
-export default routes;
+function RouteElement() {
+  const useSentryRoutes = wrapUseRoutes(useRoutes);
+
+  dealRoutes(routes);
+  const element = useSentryRoutes(routes as any);
+  return element;
+}
+
+export default RouteElement;

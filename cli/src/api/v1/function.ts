@@ -1,5 +1,11 @@
-import { request, RequestParams } from "../../util/request";
-import { CompileFunctionDto, CreateFunctionDto, LogControllerGetLogsParams, UpdateFunctionDto } from "./data-contracts";
+import { request, RequestParams } from '../../util/request'
+import {
+  CompileFunctionDto,
+  CreateFunctionDto,
+  LogControllerGetLogsParams,
+  UpdateFunctionDebugDto,
+  UpdateFunctionDto,
+} from './data-contracts'
 
 /**
  * No description
@@ -17,10 +23,10 @@ export async function functionControllerCreate(
 ): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/functions`,
-    method: "POST",
+    method: 'POST',
     data: data,
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -34,9 +40,9 @@ export async function functionControllerCreate(
 export async function functionControllerFindAll(appid: string, configParams: RequestParams = {}): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/functions`,
-    method: "GET",
+    method: 'GET',
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -54,9 +60,9 @@ export async function functionControllerFindOne(
 ): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/functions/${name}`,
-    method: "GET",
+    method: 'GET',
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -75,10 +81,10 @@ export async function functionControllerUpdate(
 ): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/functions/${name}`,
-    method: "PATCH",
+    method: 'PATCH',
     data: data,
     ...configParams,
-  });
+  })
 }
 /**
  * No description
@@ -96,9 +102,31 @@ export async function functionControllerRemove(
 ): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/functions/${name}`,
-    method: "DELETE",
+    method: 'DELETE',
     ...configParams,
-  });
+  })
+}
+/**
+ * No description
+ *
+ * @tags Function
+ * @name FunctionControllerUpdateDebug
+ * @summary Update function debug info
+ * @request PATCH:/v1/apps/{appid}/functions/{name}/debug/params
+ * @secure
+ */
+export async function functionControllerUpdateDebug(
+  appid: string,
+  name: string,
+  data: UpdateFunctionDebugDto,
+  configParams: RequestParams = {},
+): Promise<any> {
+  return request({
+    url: `/v1/apps/${appid}/functions/${name}/debug/params`,
+    method: 'PATCH',
+    data: data,
+    ...configParams,
+  })
 }
 /**
  * No description
@@ -117,10 +145,30 @@ export async function functionControllerCompile(
 ): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/functions/${name}/compile`,
-    method: "POST",
+    method: 'POST',
     data: data,
     ...configParams,
-  });
+  })
+}
+/**
+ * No description
+ *
+ * @tags Function
+ * @name FunctionControllerGetHistory
+ * @summary Get cloud function history
+ * @request GET:/v1/apps/{appid}/functions/{name}/history
+ * @secure
+ */
+export async function functionControllerGetHistory(
+  appid: string,
+  name: string,
+  configParams: RequestParams = {},
+): Promise<any> {
+  return request({
+    url: `/v1/apps/${appid}/functions/${name}/history`,
+    method: 'GET',
+    ...configParams,
+  })
 }
 /**
  * No description
@@ -137,8 +185,8 @@ export async function logControllerGetLogs(
 ): Promise<any> {
   return request({
     url: `/v1/apps/${appid}/logs/functions`,
-    method: "GET",
+    method: 'GET',
     params: query,
     ...configParams,
-  });
+  })
 }

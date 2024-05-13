@@ -37,9 +37,12 @@ import useStorageStore from "../../store";
 
 import SiteStatus from "./SiteStatus";
 
+import useGlobalStore from "@/pages/globalStore";
+
 function CreateWebsiteModal() {
   const { isOpen, onOpen, onClose } = useDisclosure();
   const { currentStorage, getOrigin } = useStorageStore();
+  const { showSuccess, showInfo, showWarning } = useGlobalStore();
   const { register, setFocus, handleSubmit, reset } = useForm<{ domain: string }>();
   const { t } = useTranslation();
   const createWebsiteMutation = useWebsiteCreateMutation();
@@ -53,13 +56,14 @@ function CreateWebsiteModal() {
       {currentStorage?.websiteHosting &&
       currentStorage.websiteHosting.state === BUCKET_STATUS.Active ? (
         <div className="flex">
-          <span className="mr-2 font-semibold">{t("StoragePanel.CurrentDomain")}</span>
+          <span className="mr-2 font-semibold text-grayModern-600">
+            {t("StoragePanel.CurrentDomain")}
+          </span>
           <Link
             className="mr-2 cursor-pointer"
             href={
               currentStorage?.websiteHosting?.isCustom
-                ? // custom domain don't support https currently
-                  "http://" + currentStorage?.websiteHosting?.domain
+                ? `${window.location.protocol}//${currentStorage?.websiteHosting?.domain}`
                 : getOrigin(currentStorage?.websiteHosting?.domain)
             }
             isExternal
@@ -71,7 +75,7 @@ function CreateWebsiteModal() {
 
           <Menu>
             <MenuButton className="-mt-[2px] ml-2">
-              <MoreIcon fontSize={10} />
+              <MoreIcon fontSize={14} />
             </MenuButton>
             <MenuList minWidth="100px">
               <MenuItem
@@ -107,11 +111,13 @@ function CreateWebsiteModal() {
       ) : (
         <Button
           size="xs"
+          px={4}
+          height={8}
           variant={"secondary"}
           style={{ borderRadius: "1rem" }}
           disabled={currentStorage === undefined}
-          onClick={() => {
-            if (currentStorage?.policy === BUCKET_POLICY_TYPE.private) {
+          onClick={async () => {
+            if (!(currentStorage?.policy === BUCKET_POLICY_TYPE.readonly)) {
               toast({
                 status: "warning",
                 position: "top",
@@ -119,10 +125,14 @@ function CreateWebsiteModal() {
               });
               return;
             }
-            createWebsiteMutation.mutateAsync({
+            const res = await createWebsiteMutation.mutateAsync({
               bucketName: currentStorage && currentStorage.name,
               state: BUCKET_STATUS.Active,
             });
+            if (!res.error) {
+              showSuccess(t("StoragePanel.SuccessfullyHosted"));
+              showInfo(t("StoragePanel.SuccessfullyHostedTips"), 5000, true);
+            }
           }}
         >
           {t("StoragePanel.websiteHost")}
@@ -134,19 +144,16 @@ function CreateWebsiteModal() {
         <ModalContent>
           <ModalHeader>{t("StoragePanel.CustomDomain")}</ModalHeader>
           <ModalCloseButton />
-
           <ModalBody pb={6}>
             <VStack spacing={6} align="flex-start">
-              {currentStorage?.policy === BUCKET_POLICY_TYPE.private ? (
+              {!(currentStorage?.policy === BUCKET_POLICY_TYPE.readonly) ? (
                 <p className="font-semibold text-error-500">{t("StoragePanel.editHostTip")}</p>
               ) : null}
               <FormControl>
                 <FormLabel>CNAME</FormLabel>
                 <InputGroup size="sm">
                   <Input variant="filled" value={cnameDomain} readOnly />
-                  <InputRightAddon
-                    children={<CopyText text={cnameDomain} className="cursor-pointer" />}
-                  />
+                  <InputRightAddon children={<CopyText text={cnameDomain} />} />
                 </InputGroup>
               </FormControl>
               <FormControl>
@@ -170,18 +177,19 @@ function CreateWebsiteModal() {
               </FormControl>
             </VStack>
           </ModalBody>
-
           <ModalFooter>
             <Button
               type="submit"
               isLoading={updateWebsiteMutation.isLoading}
               onClick={handleSubmit(async (value) => {
-                const res: any = await updateWebsiteMutation.mutateAsync({
+                const res = await updateWebsiteMutation.mutateAsync({
                   id: currentStorage?.websiteHosting._id,
                   domain: value.domain,
                 });
                 if (res.data) {
                   onClose();
+                } else if (res.error === "domain not resolved") {
+                  showWarning(t("StoragePanel.DomainNotResolved"));
                 }
               })}
             >

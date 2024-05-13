@@ -8,7 +8,7 @@
 import assert = require('assert')
 import { Params, Policy } from 'database-proxy'
 import { logger } from './logger'
-import { CloudFunction } from './function-engine'
+import { FunctionExecutor, FunctionCache } from './engine'
 import { DatabaseAgent } from '../db'
 import { generateUUID } from './utils'
 import { POLICY_COLLECTION } from '../constants'
@@ -95,14 +95,17 @@ export class PolicyAgent {
     }
 
     try {
-      const func_data = CloudFunction.getFunctionByName(injectorName)
-      assert.ok(func_data, 'getFunctionByName(): function not found')
+      const funcData = FunctionCache.get(injectorName)
+      assert.ok(funcData, 'getFunctionByName(): function not found')
 
-      const func = new CloudFunction(func_data)
-      const ret = await func.invoke({
-        __function_name: func.name,
-        requestId: generateUUID(),
-      })
+      const func = new FunctionExecutor(funcData)
+      const ret = await func.invoke(
+        {
+          __function_name: funcData.name,
+          requestId: generateUUID(),
+        },
+        false,
+      )
       assert(typeof ret.data === 'function', 'function type needed')
 
       return ret.data

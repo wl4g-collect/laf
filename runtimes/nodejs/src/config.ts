@@ -31,23 +31,39 @@ export default class Config {
   }
 
   /**
-   * the logger level : 'fatal', 'error', 'warning', 'info', 'debug', 'trace'
+   * the logger level : 'debug', 'info', 'warn', 'error'
    */
-  static get LOG_LEVEL():
-    | 'fatal'
-    | 'error'
-    | 'warning'
-    | 'info'
-    | 'debug'
-    | 'trace' {
-    return (process.env['LOG_LEVEL'] as any) ?? (this.isProd ? 'info' : 'debug')
+  static get LOG_LEVEL(): 'debug' | 'info' | 'warn' | 'error' {
+    return (process.env['LOG_LEVEL'] as any) || 'debug'
+  }
+
+  /**
+   * the logger display line level : 'info', 'warn', 'error', 'debug'
+   */
+  static get DISPLAY_LINE_LOG_LEVEL(): 'debug' | 'info' | 'warn' | 'error' {
+    return (process.env['DISPLAY_LINE_LOG_LEVEL'] as any) || 'error'
+  }
+
+  /**
+   * the object depth limit when logging
+   */
+  static get LOG_DEPTH(): number {
+    const depth = (process.env['LOG_DEPTH'] as any) ?? 1
+    if (depth < 0) {
+      return 0
+    }
+    return depth > 5 ? 5 : depth
   }
 
   /**
    * the serving port, default is 8000
    */
   static get PORT(): number {
-    return (process.env.PORT ?? 8000) as number
+    return (process.env.__PORT ?? 8000) as number
+  }
+
+  static get STORAGE_PORT(): number {
+    return (process.env.__STORAGE_PORT ?? 9000) as number
   }
 
   /**
@@ -55,13 +71,6 @@ export default class Config {
    */
   static get isProd(): boolean {
     return process.env.NODE_ENV === 'production'
-  }
-
-  /**
-   * Expired time of function logs, in seconds
-   */
-  static get FUNCTION_LOG_EXPIRED_TIME(): number {
-    return (process.env.FUNCTION_LOG_EXPIRED_TIME ?? 3600 * 24 * 3) as number
   }
 
   static get RUNTIME_IMAGE(): string {
@@ -82,5 +91,33 @@ export default class Config {
 
   static get REQUEST_LIMIT_SIZE(): string {
     return process.env.REQUEST_LIMIT_SIZE || '10mb'
+  }
+
+  static get LOG_SERVER_URL(): string {
+    return process.env.LOG_SERVER_URL || ''
+  }
+
+  static get LOG_SERVER_TOKEN(): string {
+    return process.env.LOG_SERVER_TOKEN || ''
+  }
+
+  static get CHANGE_STREAM_RECONNECT_INTERVAL(): number {
+    return (process.env.CHANGE_STREAM_RECONNECT_INTERVAL || 3000) as number
+  }
+
+  static get OSS_INTERNAL_ENDPOINT(): string {
+    return process.env.OSS_INTERNAL_ENDPOINT || ''
+  }
+
+  static get OSS_EXTERNAL_ENDPOINT(): string {
+    return process.env.OSS_EXTERNAL_ENDPOINT
+  }
+
+  static get DISABLE_MODULE_CACHE(): boolean {
+    return process.env.DISABLE_MODULE_CACHE === 'true'
+  }
+
+  static get CUSTOM_DEPENDENCY_BASE_PATH(): string {
+    return process.env.CUSTOM_DEPENDENCY_BASE_PATH || '/tmp/custom_dependency'
   }
 }

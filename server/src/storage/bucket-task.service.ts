@@ -95,6 +95,12 @@ export class BucketTaskService {
       }
 
       this.logger.debug('minio bucket created:', doc.name)
+    } else {
+      this.logger.debug(
+        'minio bucket exists, try to update bucket policy:',
+        doc.name,
+      )
+      await this.minioService.updateBucketPolicy(region, doc.name, doc.policy)
     }
 
     // create bucket domain if not exists
@@ -155,13 +161,6 @@ export class BucketTaskService {
       this.logger.debug('minio bucket deleted:', doc.name)
     }
 
-    // delete bucket domain
-    const domain = await this.bucketDomainService.findOne(doc)
-    if (domain) {
-      await this.bucketDomainService.deleteOne(doc)
-      this.logger.debug('bucket domain deleted:', domain)
-    }
-
     // delete bucket website if exists
     const websiteRes = await db
       .collection<WebsiteHosting>('WebsiteHosting')
@@ -172,6 +171,13 @@ export class BucketTaskService {
 
     if (websiteRes.modifiedCount > 0) {
       this.logger.log('website state set to Deleted for bucket: ' + doc.name)
+    }
+
+    // delete bucket domain
+    const domain = await this.bucketDomainService.findOne(doc)
+    if (domain) {
+      await this.bucketDomainService.deleteOne(doc)
+      this.logger.debug('bucket domain deleted:', domain)
     }
 
     // update phase to `Deleted`

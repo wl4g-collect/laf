@@ -8,14 +8,14 @@ export function formatDate(
   return dayjs(date).format(format);
 }
 
-export function formatSize(size: number) {
+export function formatSize(size: number, fixedNumber = 2) {
   const units = ["B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"];
   let i = 0;
   while (size >= 1024) {
     size /= 1024;
     i++;
   }
-  return size.toFixed(2) + " " + units[i];
+  return size.toFixed(fixedNumber) + " " + units[i];
 }
 
 export function formateType(name: string | undefined) {
@@ -65,8 +65,7 @@ export function formatLimitCPU(cpu: number) {
 }
 
 export function formatLimitMemory(memory: number) {
-  // if memory > 1024, return GB, else return MB
-  return memory > 1024 ? memory / 1024 + t("Unit.GB") : memory + t("Unit.MB");
+  return memory >= 1024 ? memory / 1024 + t("Unit.GB") : memory + t("Unit.MB");
 }
 
 export function formatLimitCapacity(capacity: number) {
@@ -77,16 +76,32 @@ export function formatLimitTraffic(traffic: number) {
   return traffic / 1024;
 }
 
+export function uniformCPU(cpu: number) {
+  return cpu;
+}
+
+export function uniformMemory(memory: number) {
+  return memory / 1024 / 1024;
+}
+
+export function uniformCapacity(capacity: number) {
+  return capacity / 1024 / 1024;
+}
+
+export function uniformStorage(Storage: number) {
+  return Storage / 1024 / 1024;
+}
+
 export function formatPort(port: number | undefined) {
   return port === 80 || port === 443 ? "" : `:${port}`;
 }
 
 export function formatPrice(price?: number) {
-  return price ? "¥" + (price / 100).toFixed(2) : "-";
+  return price ? "¥" + (price / 100).toFixed(2) : "¥0.00";
 }
 
 export function formatOriginalPrice(price?: number, fixedNumber?: number) {
-  return price ? "¥" + price.toFixed(fixedNumber || 2) : "-";
+  return price ? "¥" + price.toFixed(fixedNumber || 2) : "¥0.00";
 }
 
 export function convertMoney(money: number) {

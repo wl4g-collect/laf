@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
 import { Box, Center, useColorModeValue } from "@chakra-ui/react";
 import clsx from "clsx";
@@ -12,12 +12,13 @@ export default function Resize(props: {
   pageId: page;
   panelId: panel;
   containerRef: any;
+  lineWidth?: number;
 }) {
-  const { type, pageId, panelId, reverse, containerRef } = props;
+  const { type, pageId, panelId, reverse, containerRef, lineWidth = 2 } = props;
   const store = useCustomSettingStore();
   const { width, height, minWidth, maxWidth, minHeight, maxHeight, display } =
     store.getLayoutInfoStyle(pageId, panelId);
-  const { isDragging, position, separatorProps } = useResizable({
+  const { isDragging, position, separatorProps, handleClick } = useResizable({
     axis: type,
     initial: type === "x" ? width : height,
     min: type === "x" ? minWidth : minHeight,
@@ -34,26 +35,40 @@ export default function Resize(props: {
     store.setLayoutInfo(pageId, panelId, newPosition);
   }, [position, pageId, panelId, store]);
   const borderColor = useColorModeValue("slate.300", "lafDark.300");
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   return (
     <>
       {display === "none" ? null : (
         <div
-          className={
-            type === "x" ? "group h-full w-1 cursor-col-resize" : "h-1 w-full cursor-row-resize"
+          className={type === "x" ? "group cursor-col-resize" : "cursor-row-resize"}
+          style={
+            type === "x"
+              ? { width: lineWidth, height: "100%" }
+              : { width: "100%", height: lineWidth }
           }
           {...separatorProps}
         >
           <Center className="relative h-full w-full">
-            {type === "x" && width <= 20 ? (
+            {type === "x" && width <= minWidth + 15 ? (
               <div
                 className={clsx(
-                  "z-50",
-                  reverse ? "rounded-l-lg" : "rounded-r-lg",
+                  "absolute z-50 cursor-pointer",
+                  !isCollapsed && !reverse && "mr-2 rounded-l-full",
+                  isCollapsed && !reverse && "ml-2 rounded-r-full",
+                  !isCollapsed && reverse && "ml-2 rounded-r-full",
+                  isCollapsed && reverse && "mr-2 rounded-l-full",
                   "h-[30px] w-2 bg-grayIron-300 leading-loose text-lafWhite-600 transition-colors group-hover:bg-grayIron-400",
                 )}
+                onClick={(e) => {
+                  handleClick(e, isCollapsed);
+                  setIsCollapsed(!isCollapsed);
+                }}
               >
-                {reverse ? <ChevronLeftIcon fontSize={10} /> : <ChevronRightIcon fontSize={10} />}
+                {!isCollapsed && !reverse && <ChevronLeftIcon fontSize={10} />}
+                {isCollapsed && !reverse && <ChevronRightIcon fontSize={10} />}
+                {!isCollapsed && reverse && <ChevronRightIcon fontSize={10} />}
+                {isCollapsed && reverse && <ChevronLeftIcon fontSize={10} />}
               </div>
             ) : (
               <>

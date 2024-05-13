@@ -1,7 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 
 import {
-  AuthenticationControllerGetProviders,
+  EmailControllerSendCode,
+  EmailControllerSignin,
+  GithubAuthControllerBind,
+  GithubAuthControllerJumpLogin,
+  GithubAuthControllerSignin,
+  GithubAuthControllerUnbind,
   PhoneControllerSendCode,
   PhoneControllerSignin,
   UserPasswordControllerReset,
@@ -38,6 +43,22 @@ export const useSigninBySmsCodeMutation = (config?: { onSuccess: (result: any) =
   return useMutation(
     (values: any) => {
       return PhoneControllerSignin(values);
+    },
+    {
+      onSuccess: async (result) => {
+        if (!result.error) {
+          localStorage.setItem("token", result?.data);
+          config?.onSuccess(result);
+        }
+      },
+    },
+  );
+};
+
+export const useSigninByEmailMutation = (config?: { onSuccess: (result: any) => void }) => {
+  return useMutation(
+    (values: any) => {
+      return EmailControllerSignin(values);
     },
     {
       onSuccess: async (result) => {
@@ -92,14 +113,81 @@ export const useResetPasswordMutation = (config?: { onSuccess: (result: any) => 
   );
 };
 
-export const useGetProvidersQuery = (onSuccess: (result: any) => void) => {
+export const useSendEmailCodeMutation = (config?: { onSuccess: (result: any) => void }) => {
+  return useMutation(
+    (values: any) => {
+      return EmailControllerSendCode(values);
+    },
+    {
+      onSuccess: async (result) => {
+        config?.onSuccess(result);
+      },
+    },
+  );
+};
+
+export const useGithubAuthControllerSigninMutation = (config?: {
+  onSuccess: (result: any) => void;
+}) => {
+  return useMutation(
+    (values: any) => {
+      return GithubAuthControllerSignin(values);
+    },
+    {
+      onSuccess: async (result) => {
+        if (!result.error) {
+          config?.onSuccess(result);
+        }
+      },
+    },
+  );
+};
+
+export const useGithubAuthControllerBindMutation = (config?: {
+  onSuccess: (result: any) => void;
+}) => {
+  return useMutation(
+    (values: any) => {
+      return GithubAuthControllerBind(values);
+    },
+    {
+      onSuccess: async (result) => {
+        if (!result.error) {
+          config?.onSuccess(result);
+        }
+      },
+    },
+  );
+};
+
+export const useGithubAuthControllerJumpLoginQuery = (
+  params: any,
+  onSuccess?: (result: any) => void,
+) => {
   return useQuery(
     queryKeys.useGetProvidersQuery,
     () => {
-      return AuthenticationControllerGetProviders({});
+      return GithubAuthControllerJumpLogin(params);
     },
     {
       onSuccess,
+    },
+  );
+};
+
+export const useGithubAuthControllerUnbindMutation = (config?: {
+  onSuccess: (result: any) => void;
+}) => {
+  return useMutation(
+    (values: any) => {
+      return GithubAuthControllerUnbind({});
+    },
+    {
+      onSuccess: async (result) => {
+        if (!result.error) {
+          config?.onSuccess(result);
+        }
+      },
     },
   );
 };

@@ -1,12 +1,17 @@
-import { ArrowLeftIcon, ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon } from "@chakra-ui/icons";
-import { Button, HStack, Select, Text } from "@chakra-ui/react";
+import { Button, HStack, Select, Text, Tooltip, useColorMode } from "@chakra-ui/react";
+import clsx from "clsx";
 import { t } from "i18next";
 
-import IconWrap from "../IconWrap";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+} from "@/components/CommonIcon";
 
 export type PageValues = {
-  page?: number;
-  pageSize?: number;
+  page: number;
+  pageSize: number;
   limit?: number;
   total?: number;
 };
@@ -20,15 +25,16 @@ export default function Pagination(props: {
   const { values, onChange, options, notShowSelect } = props;
   const { page, total, pageSize } = values;
   const maxPage = total && pageSize ? Math.ceil(total / pageSize) : -1;
+  const darkMode = useColorMode().colorMode === "dark";
 
   if (maxPage > 0 && page && page > maxPage) {
     onChange({
-      ...values,
+      pageSize: values.pageSize,
       page: maxPage,
     });
   } else if (page && page < 1) {
     onChange({
-      ...values,
+      pageSize: values.pageSize,
       page: 1,
     });
   }
@@ -41,86 +47,110 @@ export default function Pagination(props: {
       whiteSpace={"nowrap"}
       justifyContent={!notShowSelect ? "space-between" : "flex-end"}
     >
-      <HStack spacing={"1"}>
-        <Text as="div" className="mr-2">
+      <HStack spacing="2" className="mr-4">
+        <Text as="div" className="mr-4">
           {t("Total")}: {total}
         </Text>
-        <IconWrap showBg tooltip="First Page" size={18}>
+        <Tooltip label={t("FirstPage").toString()}>
           <Button
             variant="link"
+            className={clsx(
+              "!h-6 !w-6 !rounded-full !p-0",
+              darkMode
+                ? "hover:bg-grayModern-600"
+                : "bg-lafWhite-600 !text-[#262A32] hover:bg-grayModern-200",
+            )}
+            style={{ minWidth: "24px" }}
+            isDisabled={page === 1 || maxPage === -1}
             onClick={() => {
               onChange({
-                ...values,
+                pageSize: values.pageSize,
                 page: 1,
               });
             }}
-            isDisabled={page === 1 || maxPage === -1}
           >
-            <ArrowLeftIcon fontSize={"8px"} />
+            <ArrowLeftIcon fontSize="12px" />
           </Button>
-        </IconWrap>
-        <IconWrap showBg tooltip="Previous Page" size={18}>
+        </Tooltip>
+        <Tooltip label={t("PreviousPage").toString()}>
           <Button
             variant="link"
+            className={clsx(
+              "!h-6 !w-6 !rounded-full !p-0",
+              darkMode
+                ? "hover:bg-grayModern-600"
+                : "bg-lafWhite-600 !text-[#262A32] hover:bg-grayModern-200",
+            )}
+            style={{ minWidth: "24px" }}
+            isDisabled={page === 1 || maxPage === -1}
             onClick={() =>
               onChange({
-                ...values,
-                page: page! - 1,
+                pageSize: values.pageSize,
+                page: page - 1,
               })
             }
-            isDisabled={page === 1 || maxPage === -1}
           >
-            <ChevronLeftIcon fontSize={"16px"} />
+            <ChevronLeftIcon fontSize="12px" />
           </Button>
-        </IconWrap>
-        <Text fontWeight="bold" as="p" minWidth={"36px"} px="8px" textAlign={"center"}>
-          {page}
-        </Text>
+        </Tooltip>
+        <Text className="min-w-[10px] text-center font-medium text-[#828289]">{page}</Text>
         <Text>/</Text>
-        <Text fontWeight="bold" as="p" minWidth={"36px"} px="8px" textAlign={"center"}>
-          {maxPage < 0 ? "-" : maxPage}
-        </Text>
-        <IconWrap showBg tooltip="Next Page" size={18}>
+        <Text className="min-w-[10px] text-center font-medium">{maxPage < 0 ? "-" : maxPage}</Text>
+        <Tooltip label={t("NextPage").toString()}>
           <Button
             variant="link"
             isDisabled={maxPage === page || maxPage === -1}
+            className={clsx(
+              "!h-6 !w-6 !rounded-full !p-0",
+              darkMode
+                ? "hover:bg-grayModern-600"
+                : "bg-lafWhite-600 !text-[#262A32] hover:bg-grayModern-200",
+            )}
+            style={{ minWidth: "24px" }}
             onClick={() => {
               onChange({
-                ...values,
-                page: page! + 1,
+                pageSize: values.pageSize,
+                page: page + 1,
               });
             }}
           >
-            <ChevronRightIcon fontSize={"16px"} />
+            <ChevronRightIcon fontSize="12px" />
           </Button>
-        </IconWrap>
-        <IconWrap showBg tooltip="Last Page" size={18}>
+        </Tooltip>
+        <Tooltip label={t("LastPage").toString()}>
           <Button
             variant="link"
+            className={clsx(
+              "!h-6 !w-6 !rounded-full !p-0",
+              darkMode
+                ? "hover:bg-grayModern-600"
+                : "bg-lafWhite-600 !text-[#262A32] hover:bg-grayModern-200",
+            )}
+            style={{ minWidth: "24px" }}
+            isDisabled={maxPage === page || maxPage === -1}
             onClick={() => {
               onChange({
-                ...values,
+                pageSize: values.pageSize,
                 page: maxPage,
               });
             }}
-            isDisabled={maxPage === page || maxPage === -1}
           >
-            <ArrowRightIcon fontSize={"8px"} />
+            <ArrowRightIcon fontSize="12px" />
           </Button>
-        </IconWrap>
+        </Tooltip>
       </HStack>
       {!notShowSelect && (
         <Select
-          size="sm"
-          w="120px"
+          className="flex !h-8 cursor-pointer justify-center !pl-3 !text-base hover:!bg-grayModern-100/50"
+          width="92px"
           value={pageSize}
           onChange={(e: any) => {
             onChange({
-              ...values,
               pageSize: parseInt(e.target.value),
               page: 1,
             });
           }}
+          variant="unstyled"
         >
           {(options || [10, 20, 30]).map((data: any) => (
             <option key={data} value={data}>

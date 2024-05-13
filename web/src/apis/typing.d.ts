@@ -48,12 +48,33 @@ export type TBundle = {
   updatedAt: string;
 };
 
+export type TInstantMonitorData = {
+  cpuUsage: TDatabaseUsage;
+  memoryUsage: TDatabaseUsage;
+  databaseUsage: TDatabaseUsage;
+  storageUsage: TDatabaseUsage;
+};
+
+export type TCpuUsageData = {
+  metric: { pod: string };
+  values: Array<[number, string]>;
+}[];
+
+export type TDatabaseUsage = {
+  metric: { pod: string };
+  value: [number, string];
+}[];
+
 export type TSpec = {
   cpu: Cpu;
   memory: Memory;
   databaseCapacity: DatabaseCapacity;
   storageCapacity: StorageCapacity;
   networkTraffic: NetworkTraffic;
+  dedicatedDatabaseCPU: Cpu;
+  dedicatedDatabaseMemory: Memory;
+  dedicatedDatabaseCapacity: DatabaseCapacity;
+  dedicatedDatabaseReplicas: Replicas;
 };
 
 export type Cpu = {
@@ -73,6 +94,10 @@ export type StorageCapacity = {
 };
 
 export type NetworkTraffic = {
+  value: number;
+};
+
+export type Replicas = {
   value: number;
 };
 
@@ -169,6 +194,7 @@ export type TRegion = {
   displayName: string;
   state: string;
   bundles: TBundle[];
+  dedicatedDatabase: boolean;
 };
 
 export type TBucket = {
@@ -274,6 +300,22 @@ export type TFunction = {
   params: any;
 };
 
+export type TFunctionNode = {
+  _id: string;
+  name: string;
+  level?: number;
+  isExpanded?: boolean;
+  desc?: string;
+  children: TreeNode[];
+};
+
+export type TFunctionList = {
+  list: TFunction[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 export type TMethod = "GET" | "POST" | "PUT" | "DELETE" | "HEAD" | "OPTIONS" | "PATCH";
 
 export type Source = {
@@ -296,6 +338,11 @@ export type TFunctionTemplate = {
   items: { name: string; source: { code: string } }[];
   dependencies: string[];
   environments: { name: string; value: string }[];
+  uid: string;
+  user: { username: string };
+  author: string;
+  stared: boolean;
+  isRecommended: boolean;
 };
 
 export type TemplateList = {
@@ -343,6 +390,12 @@ export type TApplicationItem = {
       limitDatabaseTPS: number;
       limitStorageTPS: number;
       reservedTimeAfterExpired: number;
+      dedicatedDatabase: {
+        limitCPU: number;
+        limitMemory: number;
+        capacity: number;
+        replicas: number;
+      };
     };
     autoscaling: {
       enable: boolean;
@@ -367,3 +420,5 @@ export type TApplicationItem = {
     };
   };
 };
+
+export type TSmsCode = "Signin" | "Signup" | "ResetPassword" | "Bind" | "Unbind" | "ChangePhone";

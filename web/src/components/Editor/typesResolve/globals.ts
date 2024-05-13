@@ -1,3 +1,4 @@
+import { objectidType } from "./objectidType";
 import { requestType } from "./requestType";
 import { responseType } from "./responseType";
 import { readableStreamTypes, streamTypes, writableStreamTypes } from "./streamType";
@@ -8,6 +9,7 @@ ${readableStreamTypes}
 ${writableStreamTypes}
 ${requestType}
 ${responseType}
+${objectidType}
 
 declare class FunctionConsole {
   private _logs;
@@ -31,14 +33,8 @@ interface File {
  * The input parameters of cloud function calls
  */
 interface FunctionContext {
-  /**
-   * This object is parsed from JWT Token Payload
-   * @deprecated use user instead 
-   */
-  auth?: {
-    uid?: string
-  }
-
+  __function_name: string;
+  
   /**
    * This object is parsed from JWT Token Payload
    */
@@ -95,6 +91,8 @@ interface FunctionContext {
    * WebSocket object
    */
   socket?: WebSocket
+
+  [key: string]: any
 }
 
 interface IModule {
@@ -108,10 +106,18 @@ interface IExports {
   main: (ctx: FunctionContext) => any
 }
 
+interface IProcess {
+  /**
+   * Environment
+   */
+  env: any
+}
+
 declare const module: IModule
 declare const exports: IExports
 declare const console: FunctionConsole
 declare const global: typeof globalThis
+declare const process: IProcess
 
 /**
  *  The main function, entry of the cloud function

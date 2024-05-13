@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BiRefresh } from "react-icons/bi";
-import { AddIcon, CopyIcon, Search2Icon } from "@chakra-ui/icons";
+import { AddIcon, LinkIcon, Search2Icon } from "@chakra-ui/icons";
 import {
   Button,
   HStack,
@@ -9,9 +8,11 @@ import {
   InputLeftElement,
   useColorMode,
 } from "@chakra-ui/react";
+import { EJSON } from "bson";
 import { t } from "i18next";
 import { throttle } from "lodash";
 
+import { OutlineCopyIcon, RefreshIcon } from "@/components/CommonIcon";
 import CopyText from "@/components/CopyText";
 import JSONEditor from "@/components/Editor/JSONEditor";
 import JSONViewer from "@/components/Editor/JSONViewer";
@@ -23,12 +24,28 @@ import { COLOR_MODE } from "@/constants";
 import getPageInfo from "@/utils/getPageInfo";
 
 import AddDataModal from "../../../mods/AddDataModal/index";
+import IndexModal from "../../../mods/IndexModal";
 import RightPanelEditBox from "../../../RightComponent/EditBox";
 import RightPanelList from "../../../RightComponent/List";
 import { useDeleteDataMutation, useEntryDataQuery, useUpdateDataMutation } from "../../../service";
 import useDBMStore from "../../../store";
 
+import "./index.module.scss";
+
 import useGlobalStore from "@/pages/globalStore";
+
+function stringifyEJSONAndFormat(data: any) {
+  // get stringified EJSON
+  const ejson = EJSON.stringify(data);
+
+  // parse ejson string to json object
+  const parsed = JSON.parse(ejson);
+
+  // format json object
+  const formatted = JSON.stringify(parsed, null, 2);
+
+  return formatted;
+}
 
 export default function DataPanel() {
   const [currentData, setCurrentData] = useState<any>({ data: undefined, record: "{}" });
@@ -45,6 +62,7 @@ export default function DataPanel() {
   };
 
   const [queryData, setQueryData] = useState<QueryData>();
+  const darkMode = colorMode === COLOR_MODE.dark;
 
   useEffect(() => {
     if (store.currentDB !== undefined) {
@@ -74,7 +92,7 @@ export default function DataPanel() {
 
   useEffect(() => {
     if (entryDataQuery.isFetched && isAdd.status) {
-      const { total, page, pageSize } = getPageInfo(entryDataQuery.data);
+      const { total, page, pageSize } = getPageInfo(entryDataQuery.data as any);
       const newTotal = (total || 0) + isAdd.count;
       const maxPage = pageSize ? Math.ceil(newTotal / pageSize) : -1;
       // Calculate and jump to the maxPage after adding
@@ -130,7 +148,7 @@ export default function DataPanel() {
   const handleData = async () => {
     let params = {};
     try {
-      params = JSON.parse(currentData.record);
+      params = EJSON.parse(currentData.record) as any;
       if (Object.keys(params).length === 0) {
         globalStore.showError(t("DataEntry.CreateError"));
         return;
@@ -145,7 +163,7 @@ export default function DataPanel() {
   return (
     <>
       <Panel.Header className="my-1 flex-shrink-0">
-        <div className="flex items-center flex-1">
+        <div className="flex flex-1 items-center">
           <AddDataModal
             schema={currentData.data ? currentData.data : {}}
             onSuccessSubmit={(id: string, count: number) => {
@@ -165,7 +183,8 @@ export default function DataPanel() {
               size="xs"
               variant="textGhost"
               leftIcon={<AddIcon fontSize={10} className="text-grayModern-500" />}
-              disabled={store.currentDB === undefined}
+              disabled={!store.currentDB}
+              isLoading={entryDataQuery.isFetching}
               className="mr-2 font-bold"
             >
               {t("CollectionPanel.AddData")}
@@ -175,14 +194,26 @@ export default function DataPanel() {
           <Button
             size="xs"
             variant="textGhost"
-            disabled={store.currentDB === undefined}
+            disabled={!store.currentDB}
             className="mr-2"
             isLoading={entryDataQuery.isFetching}
-            leftIcon={<BiRefresh fontSize={20} />}
+            leftIcon={<RefreshIcon fontSize={16} />}
             onClick={() => refresh(search)}
           >
             {t("RefreshData")}
           </Button>
+          <IndexModal>
+            <Button
+              size="xs"
+              variant="textGhost"
+              disabled={!store.currentDB}
+              className="mr-2"
+              isLoading={entryDataQuery.isFetching}
+              leftIcon={<LinkIcon fontSize={10} />}
+            >
+              {t("CollectionPanel.IndexManage")}
+            </Button>
+          </IndexModal>
           <form
             className="flex flex-1"
             onSubmit={(event) => {
@@ -190,19 +221,20 @@ export default function DataPanel() {
               refresh(search);
             }}
           >
-            <div className="my-4 flex justify-between flex-1">
+            <div className="my-4 flex flex-1 justify-between">
               <HStack spacing={2} className="flex flex-1">
                 <InputGroup className="mr-4 flex-1">
                   <InputLeftElement
-                    height={"8"}
+                    height="7"
                     pointerEvents="none"
                     children={<Search2Icon color="gray.300" />}
                   />
                   <Input
-                    rounded={"full"}
+                    rounded="full"
                     disabled={store.currentDB === undefined}
                     placeholder={t("CollectionPanel.Query").toString()}
                     size="sm"
+                    height="7"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                   />
@@ -256,26 +288,30 @@ export default function DataPanel() {
               }}
               deleteRuleMutation={deleteDataMutation}
               component={(item: any) => {
-                return <JSONViewer colorMode={colorMode} code={JSON.stringify(item, null, 2)} />;
+                const code = JSON.stringify(item, null, 2);
+                return <JSONViewer colorMode={colorMode} code={code} className="dataList" />;
               }}
               toolComponent={(item: any) => {
                 const newData = { ...item };
                 delete newData._id;
+
+                const text = stringifyEJSONAndFormat(newData);
                 return (
-                  <IconWrap
-                    showBg
-                    tooltip={t("Copy").toString()}
-                    size={32}
-                    className="group/icon ml-2 hover:bg-gray-200"
+                  <CopyText
+                    hideToolTip
+                    text={text}
+                    tip={String(t("Copied"))}
+                    className={darkMode ? "ml-2 hover:bg-gray-600" : "ml-2 hover:bg-gray-200"}
                   >
-                    <CopyText
-                      hideToolTip
-                      text={JSON.stringify(newData, null, 2)}
-                      tip={String(t("Copied"))}
+                    <IconWrap
+                      showBg
+                      tooltip={t("Copy").toString()}
+                      size={32}
+                      className="group/icon"
                     >
-                      <CopyIcon />
-                    </CopyText>
-                  </IconWrap>
+                      <OutlineCopyIcon size="14" color={darkMode ? "#ffffff" : "#24282C"} />
+                    </IconWrap>
+                  </CopyText>
                 );
               }}
             />
@@ -288,7 +324,7 @@ export default function DataPanel() {
               <div className="mb-4 flex-1 rounded">
                 <JSONEditor
                   colorMode={colorMode}
-                  value={JSON.stringify(currentData.data || {}, null, 2)}
+                  value={stringifyEJSONAndFormat(currentData.data || {})}
                   onChange={(values) => {
                     setCurrentData((pre: any) => {
                       return {

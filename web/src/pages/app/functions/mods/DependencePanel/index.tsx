@@ -10,13 +10,11 @@ import ConfirmButton from "@/components/ConfirmButton";
 import FileTypeIcon, { FileType } from "@/components/FileTypeIcon";
 import Panel from "@/components/Panel";
 import SectionList from "@/components/SectionList";
-import { APP_STATUS } from "@/constants";
 
 import AddDependenceModal from "./AddDependenceModal";
 import { TPackage, useDelPackageMutation, usePackageQuery } from "./service";
 
 import useCustomSettingStore from "@/pages/customSetting";
-import useGlobalStore from "@/pages/globalStore";
 
 export const openDependenceDetail = (depName: string) => {
   window.open(`https://www.npmjs.com/package/${encodeURIComponent(depName)}`, "_blank");
@@ -24,10 +22,7 @@ export const openDependenceDetail = (depName: string) => {
 
 export default function DependenceList() {
   const packageQuery = usePackageQuery();
-  const globalStore = useGlobalStore((state) => state);
-  const delPackageMutation = useDelPackageMutation(() => {
-    globalStore.updateCurrentApp(globalStore.currentApp!, APP_STATUS.Restarting);
-  });
+  const delPackageMutation = useDelPackageMutation();
   const { t } = useTranslation();
 
   const store = useCustomSettingStore();
@@ -47,14 +42,14 @@ export default function DependenceList() {
   });
 
   return (
-    <Panel className="min-w-[215px]">
+    <Panel className="min-w-[225px]">
       <Panel.Header
         title={t("FunctionPanel.Dependence")}
         actions={[<AddDependenceModal key="AddDependenceModal" />]}
       />
       <Tabs variant="soft-rounded" colorScheme={"gray"} size={"xs"}>
         <TabList>
-          <Tab className="mr-2 px-2">
+          <Tab className="mr-2 px-2 py-1">
             {t("FunctionPanel.CustomDependence")}
             {customPackage.length > 0 && (
               <Badge rounded={"full"} ml="1">
@@ -62,7 +57,7 @@ export default function DependenceList() {
               </Badge>
             )}
           </Tab>
-          <Tab>
+          <Tab className="mr-2 px-2 py-1">
             {t("FunctionPanel.SystemDependence")}
             <Badge rounded={"full"} ml="1">
               {builtinPackage.length}
@@ -73,6 +68,7 @@ export default function DependenceList() {
           <TabPanel px={0} py={1}>
             {customPackage.length > 0 ? (
               <SectionList
+                className="pr-2"
                 style={{ height: SECTION_HEIGHT, overflowY: "auto", overflowX: "hidden" }}
               >
                 {customPackage.map((packageItem: TPackage) => {
@@ -122,7 +118,10 @@ export default function DependenceList() {
           </TabPanel>
           <TabPanel px={0} py={1}>
             {/* build in packages */}
-            <SectionList style={{ height: SECTION_HEIGHT, overflowY: "auto", overflowX: "hidden" }}>
+            <SectionList
+              className="pr-2"
+              style={{ height: SECTION_HEIGHT, overflowY: "auto", overflowX: "hidden" }}
+            >
               {builtinPackage.map((packageItem: TPackage) => {
                 return (
                   <SectionList.Item

@@ -13,7 +13,7 @@ import { AppSchema } from '../../schema/app'
 import { ProjectSchema } from '../../schema/project'
 import { getBaseDir } from '../../util/sys'
 
-export async function add(dependencyName: string, options: { targetVersion: string }) {
+export async function add(dependencyName: string, options: { targetVersion: string; remote: boolean }) {
   const appSchema = AppSchema.read()
   const dependencyDto: CreateDependencyDto = {
     name: dependencyName,
@@ -25,10 +25,13 @@ export async function add(dependencyName: string, options: { targetVersion: stri
   await dependencyControllerAdd(appSchema.appid, [dependencyDto])
   await waitApplicationState('Running')
 
-  await pullOne()
-
-  console.log(`${getEmoji('✅')} dependency ${dependencyDto.name}:${dependencyDto.spec} installed`)
-  console.log(`${getEmoji('👉')} please run \`npm install\` to install dependency`)
+  if (options.remote) {
+    console.log(`${getEmoji('✅')} dependency ${dependencyDto.name}:${dependencyDto.spec} added to remote`)
+  } else {
+    await pullOne()
+    console.log(`${getEmoji('✅')} dependency ${dependencyDto.name}:${dependencyDto.spec} installed`)
+    console.log(`${getEmoji('👉')} please run \`npm install\` to install dependency`)
+  }
 }
 
 export async function pull() {
@@ -37,16 +40,16 @@ export async function pull() {
   console.log(`${getEmoji('👉')} please run 'npm install' install dependencies`)
 }
 
-async function pullOne(updateYaml: boolean = true) {
+async function pullOne(updateYaml = true) {
   const appSchema = AppSchema.read()
 
   const dependencies = await dependencyControllerGetDependencies(appSchema.appid)
 
   const packagePath = path.resolve(getBaseDir(), PACKAGE_FILE)
-  let packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf-8'))
+  const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf-8'))
   const devDependencies = {}
   const localDependencies = {}
-  for (let dependency of dependencies) {
+  for (const dependency of dependencies) {
     devDependencies[dependency.name] = dependency.spec
 
     // add a non-built-in dependency
@@ -65,18 +68,18 @@ async function pullOne(updateYaml: boolean = true) {
   }
 }
 
-export async function push() {
+export async function push(options: { updatePackage: boolean }) {
   const appSchema = AppSchema.read()
 
   const serverDependencies = await dependencyControllerGetDependencies(appSchema.appid)
   const serverDependenciesMap = new Map<string, boolean>()
-  for (let item of serverDependencies) {
+  for (const item of serverDependencies) {
     serverDependenciesMap.set(item.name, true)
   }
 
   const projectSchema = ProjectSchema.read()
 
-  for (let key in projectSchema.spec.dependencies) {
+  for (const key in projectSchema.spec.dependencies) {
     if (!serverDependenciesMap.has(key)) {
       const createDependencyDto: CreateDependencyDto = {
         name: key,
@@ -91,8 +94,12 @@ export async function push() {
       await dependencyControllerUpdate(appSchema.appid, [updateDependencyDto])
     }
   }
-  // update package.json
-  await pullOne(false)
+
   console.log(`${getEmoji('✅')} dependency pushed`)
-  console.log(`${getEmoji('👉')} please run 'npm install' install dependencies`)
+
+  // update package.json
+  if (options.updatePackage) {
+    await pullOne(false)
+    console.log(`${getEmoji('👉')} please run 'npm install' install dependencies`)
+  }
 }

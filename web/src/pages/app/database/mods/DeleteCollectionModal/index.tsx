@@ -1,10 +1,8 @@
 import { useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { DeleteIcon } from "@chakra-ui/icons";
 import {
   Button,
   FormControl,
-  FormErrorMessage,
   Input,
   Modal,
   ModalBody,
@@ -16,9 +14,12 @@ import {
   useDisclosure,
 } from "@chakra-ui/react";
 
+import { RecycleDeleteIcon } from "@/components/CommonIcon";
 import IconText from "@/components/IconText";
 
 import { useDeleteDBMutation } from "../../service";
+
+import useGlobalStore from "@/pages/globalStore";
 function DeleteCollectionModal(props: { database: any }) {
   const { database } = props;
   const { t } = useTranslation();
@@ -28,14 +29,9 @@ function DeleteCollectionModal(props: { database: any }) {
       onClose();
     },
   });
+  const { showError } = useGlobalStore();
 
-  const {
-    register,
-    handleSubmit,
-    setFocus,
-    reset,
-    formState: { errors },
-  } = useForm<{
+  const { register, handleSubmit, setFocus, reset, setValue } = useForm<{
     name: string;
   }>();
 
@@ -49,7 +45,7 @@ function DeleteCollectionModal(props: { database: any }) {
             setFocus("name");
           }, 0);
         }}
-        icon={<DeleteIcon />}
+        icon={<RecycleDeleteIcon fontSize={16} />}
         text={t("Delete")}
         className="hover:!text-error-600"
       />
@@ -63,32 +59,33 @@ function DeleteCollectionModal(props: { database: any }) {
             <p className="mb-2">
               {t("CollectionPanel.DeleteCollectionTip")}
               <span className="mx-1 font-bold">{database.name}</span>
-              {t("DeleteTip")}。
+              {t("DeleteTip")}
             </p>
             <p className="mb-4">
               {t("CollectionPanel.InputName")}
               <span className="mx-1 font-bold text-red-500">{database.name}</span>
-              {t("ToConfirm")}。
+              {t("ToConfirm")}
             </p>
             <FormControl>
               <Input
-                {...register("name", {
-                  required: "name is required",
-                })}
+                {...register("name")}
                 id="name"
                 placeholder={database?.name}
-                variant="filled"
+                onChange={(e) => {
+                  setValue("name", e.target.value.trim());
+                }}
               />
-              <FormErrorMessage>{errors.name && errors.name.message}</FormErrorMessage>
             </FormControl>
           </ModalBody>
 
           <ModalFooter>
             <Button
               isLoading={deleteDBMutation.isLoading}
-              colorScheme="red"
               onClick={handleSubmit(async (data) => {
-                if (data.name === database.name) {
+                if (data.name !== database.name) {
+                  showError(t("NameNotMatch"));
+                  return;
+                } else {
                   await deleteDBMutation.mutateAsync({ name: database.name });
                 }
               })}

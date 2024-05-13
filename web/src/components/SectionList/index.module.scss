@@ -6,19 +6,18 @@
   li {
     cursor: pointer;
     display: flex;
-    height: 24px;
+    min-height: 24px;
     align-items: center;
     justify-content: space-between;
-    padding: 0px 12px;
+    padding: 0px 4px 0px 12px;
     margin-bottom: 2px;
-    color: var(--chakra-colors-grayModern-600);
 
     span {
       vertical-align: middle;
     }
 
     svg {
-      fill: #9ca2a8;
+      fill: #7b838b;
     }
 
     &.small {
@@ -27,7 +26,7 @@
 
     &:hover,
     &.active {
-      background-color: #00B3B01A;
+      background-color: #00b3b01a;
       color: var(--chakra-colors-primary-600);
 
       svg {

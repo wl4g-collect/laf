@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import {
   Button,
   Checkbox,
@@ -16,11 +15,16 @@ import {
 import clsx from "clsx";
 import { t } from "i18next";
 
+import { OutlineViewOffIcon, OutlineViewOnIcon } from "@/components/CommonIcon";
+import { Logo, LogoText } from "@/components/LogoIcon";
+import { Routes } from "@/constants";
 import { COLOR_MODE } from "@/constants";
 
 import useInviteCode from "@/hooks/useInviteCode";
+import { useGroupMemberAddMutation } from "@/pages/app/collaboration/service";
 import {
-  useGetProvidersQuery,
+  useGithubAuthControllerBindMutation,
+  useSendEmailCodeMutation,
   useSendSmsCodeMutation,
   useSignupMutation,
 } from "@/pages/auth/service";
@@ -29,6 +33,7 @@ import useGlobalStore from "@/pages/globalStore";
 
 type FormData = {
   phone?: string;
+  email?: string;
   validationCode?: string;
   account: string;
   password: string;
@@ -38,24 +43,23 @@ type FormData = {
 export default function SignUp() {
   const signupMutation = useSignupMutation();
   const sendSmsCodeMutation = useSendSmsCodeMutation();
+  const sendEmailCodeMutation = useSendEmailCodeMutation();
   const [isNeedPhone, setIsNeedPhone] = useState(false);
-  const { providers, setProviders } = useAuthStore();
+  const [isNeedEmail, setIsNeedEmail] = useState(false);
+  const { passwordProvider } = useAuthStore();
 
   const { colorMode } = useColorMode();
   const darkMode = colorMode === COLOR_MODE.dark;
 
-  useGetProvidersQuery((data: any) => {
-    setProviders(data?.data || []);
-  });
+  const githubToken = sessionStorage.getItem("githubToken");
+  const sessionData = sessionStorage.getItem("collaborationCode");
 
   useEffect(() => {
-    if (providers.length) {
-      const passwordProvider = providers.find((provider) => provider.name === "user-password");
-      if (passwordProvider) {
-        setIsNeedPhone(passwordProvider.bind?.phone === "required");
-      }
+    if (passwordProvider) {
+      setIsNeedPhone(passwordProvider.bind?.phone === "required");
+      setIsNeedEmail(passwordProvider.bind?.email === "required");
     }
-  }, [providers]);
+  }, [passwordProvider]);
 
   const { showSuccess, showError } = useGlobalStore();
   const navigate = useNavigate();
@@ -64,6 +68,8 @@ export default function SignUp() {
   const [isSendSmsCode, setIsSendSmsCode] = useState(false);
   const [countdown, setCountdown] = useState(60);
   const [isShowPassword, setIsShowPassword] = useState(false);
+  const joinGroupMutation = useGroupMemberAddMutation();
+  const githubAuthControllerBindMutation = useGithubAuthControllerBindMutation();
   const inviteCode = useInviteCode();
 
   const {
@@ -96,6 +102,15 @@ export default function SignUp() {
           inviteCode: inviteCode,
           type: "Signup",
         }
+      : isNeedEmail
+      ? {
+          email: data.email,
+          code: data.validationCode,
+          username: data.account,
+          password: data.password,
+          inviteCode: inviteCode,
+          type: "Signup",
+        }
       : {
           username: data.account,
           password: data.password,
@@ -106,8 +121,26 @@ export default function SignUp() {
     const res = await signupMutation.mutateAsync(params);
 
     if (res?.data) {
-      showSuccess(t("AuthPanel.SignUpSuccess"));
-      navigate("/dashboard", { replace: true });
+      sessionStorage.removeItem("githubToken");
+      if (githubToken) {
+        githubAuthControllerBindMutation.mutateAsync({
+          token: githubToken,
+          isRegister: true,
+        });
+      }
+      const collaborationCode = JSON.parse(sessionData || "{}");
+      sessionStorage.removeItem("collaborationCode");
+      if (sessionData) {
+        const res = await joinGroupMutation.mutateAsync({ code: collaborationCode.code });
+        if (!res.error) {
+          showSuccess(t("Collaborate.JoinSuccess"));
+        }
+        navigate(`/app/${collaborationCode.appid}/function`);
+      } else if (res?.error === "user already exists") {
+        navigate(Routes.login, { replace: true });
+      } else {
+        navigate(Routes.dashboard, { replace: true });
+      }
     }
   };
 
@@ -117,18 +150,35 @@ export default function SignUp() {
     }
 
     const phone = getValues("phone") || "";
-    const isValidate = /^1[2-9]\d{9}$/.test(phone);
-    if (!isValidate) {
-      showError(t("AuthPanel.PhoneTip"));
-      return;
+    const email = getValues("email") || "";
+
+    let res;
+
+    if (isNeedPhone) {
+      const isValidate = /^1[2-9]\d{9}$/.test(phone);
+      if (!isValidate) {
+        showError(t("AuthPanel.PhoneTip"));
+        return;
+      }
+      res = await sendSmsCodeMutation.mutateAsync({
+        phone,
+        type: "Signup",
+      });
+    }
+
+    if (isNeedEmail) {
+      const isValidate = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+      if (!isValidate) {
+        showError(t("AuthPanel.EmailTip"));
+        return;
+      }
+      res = await sendEmailCodeMutation.mutateAsync({
+        email,
+        type: "Signup",
+      });
     }
 
     switchSmsCodeStatus();
-
-    const res = await sendSmsCodeMutation.mutateAsync({
-      phone,
-      type: "Signup",
-    });
 
     if (res?.data) {
       showSuccess(t("AuthPanel.SmsCodeSendSuccess"));
@@ -153,28 +203,37 @@ export default function SignUp() {
   return (
     <div
       className={clsx(
-        "absolute left-1/2 top-1/2 w-[560px] -translate-y-1/2 rounded-[10px] p-[65px]",
+        "absolute right-[125px] top-1/2 w-[560px] -translate-y-1/2 rounded-3xl px-16 pb-16 pt-[78px]",
         { "bg-white": !darkMode, "bg-lafDark-100": darkMode },
       )}
     >
-      <div className="mb-[45px]">
-        <img src="/logo.png" alt="logo" width={40} className="mr-4" />
-      </div>
-      <div className="mb-[65px]">
+      {!!githubToken ? (
+        <div className="mb-10 text-2xl font-semibold text-grayModern-700">
+          {t("AuthPanel.BindGitHub")}
+        </div>
+      ) : (
+        <div className="mb-9 flex items-center space-x-4">
+          <Logo size="43px" outerColor="#33BABB" innerColor="white" />
+          <LogoText size="51px" color={darkMode ? "#33BABB" : "#363C42"} />
+        </div>
+      )}
+      <div>
         <FormControl isInvalid={!!errors.account} className="mb-6 flex items-center">
-          <FormLabel className="w-20" htmlFor="account">
+          <FormLabel className={darkMode ? "w-20" : "w-20 text-grayModern-700"} htmlFor="account">
             {t("AuthPanel.Account")}
           </FormLabel>
           <Input
             {...register("account", { required: true })}
             id="account"
             placeholder={t("AuthPanel.AccountPlaceholder") || ""}
-            bg={"#F8FAFB"}
-            border={"1px solid #D5D6E1"}
+            bg={darkMode ? "#363C42" : "#F8FAFB"}
+            border={darkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+            height="48px"
+            rounded="4px"
           />
         </FormControl>
         <FormControl isInvalid={!!errors.password} className="mb-6 flex items-center">
-          <FormLabel className="w-20" htmlFor="password">
+          <FormLabel className={darkMode ? "w-20" : "w-20 text-grayModern-700"} htmlFor="password">
             {t("AuthPanel.Password")}
           </FormLabel>
           <InputGroup>
@@ -185,20 +244,31 @@ export default function SignUp() {
               })}
               id="password"
               placeholder={t("AuthPanel.PasswordPlaceholder") || ""}
-              bg={"#F8FAFB"}
-              border={"1px solid #D5D6E1"}
+              bg={darkMode ? "#363C42" : "#F8FAFB"}
+              border={darkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+              height="48px"
+              rounded="4px"
             />
-            <InputRightElement width="2rem">
+            <InputRightElement width="2rem" height="100%">
               {isShowPassword ? (
-                <ViewOffIcon className="cursor-pointer" onClick={() => setIsShowPassword(false)} />
+                <OutlineViewOffIcon
+                  className="cursor-pointer !text-primary-500"
+                  onClick={() => setIsShowPassword(false)}
+                />
               ) : (
-                <ViewIcon className="cursor-pointer" onClick={() => setIsShowPassword(true)} />
+                <OutlineViewOnIcon
+                  className="cursor-pointer !text-primary-500"
+                  onClick={() => setIsShowPassword(true)}
+                />
               )}
             </InputRightElement>
           </InputGroup>
         </FormControl>
         <FormControl isInvalid={!!errors.confirmPassword} className="mb-6 flex items-center">
-          <FormLabel className="w-20" htmlFor="confirmPassword">
+          <FormLabel
+            className={darkMode ? "w-20" : "w-20 text-grayModern-700"}
+            htmlFor="confirmPassword"
+          >
             {t("AuthPanel.ConfirmPassword")}
           </FormLabel>
           <InputGroup>
@@ -209,21 +279,29 @@ export default function SignUp() {
               })}
               id="confirmPassword"
               placeholder={t("AuthPanel.ConfirmPassword") || ""}
-              bg={"#F8FAFB"}
-              border={"1px solid #D5D6E1"}
+              bg={darkMode ? "#363C42" : "#F8FAFB"}
+              border={darkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+              height="48px"
+              rounded="4px"
             />
-            <InputRightElement width="2rem">
+            <InputRightElement width="2rem" height="100%">
               {isShowPassword ? (
-                <ViewOffIcon className="cursor-pointer" onClick={() => setIsShowPassword(false)} />
+                <OutlineViewOffIcon
+                  className="cursor-pointer !text-primary-500"
+                  onClick={() => setIsShowPassword(false)}
+                />
               ) : (
-                <ViewIcon className="cursor-pointer" onClick={() => setIsShowPassword(true)} />
+                <OutlineViewOnIcon
+                  className="cursor-pointer !text-primary-500"
+                  onClick={() => setIsShowPassword(true)}
+                />
               )}
             </InputRightElement>
           </InputGroup>
         </FormControl>
         {isNeedPhone && (
           <FormControl isInvalid={!!errors?.phone} className="mb-6 flex items-center">
-            <FormLabel className="w-20" htmlFor="phone">
+            <FormLabel className={darkMode ? "w-20" : "w-20 text-grayModern-700"} htmlFor="phone">
               {t("AuthPanel.Phone")}
             </FormLabel>
             <InputGroup>
@@ -238,13 +316,15 @@ export default function SignUp() {
                 type="tel"
                 id="phone"
                 placeholder={t("AuthPanel.PhonePlaceholder") || ""}
-                bg={"#F8FAFB"}
-                border={"1px solid #D5D6E1"}
+                bg={darkMode ? "#363C42" : "#F8FAFB"}
+                border={darkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+                height="48px"
+                rounded="4px"
               />
-              <InputRightElement width="6rem">
+              <InputRightElement width="6rem" height="100%">
                 <Button
                   className="w-20"
-                  variant={isSendSmsCode ? "thirdly_disabled" : "thirdly"}
+                  variant={isSendSmsCode ? "text_disabled" : "text"}
                   onClick={handleSendSmsCode}
                 >
                   {isSendSmsCode ? `${countdown}s` : t("AuthPanel.getValidationCode")}
@@ -253,9 +333,46 @@ export default function SignUp() {
             </InputGroup>
           </FormControl>
         )}
-        {isNeedPhone && (
+        {isNeedEmail && (
+          <FormControl isInvalid={!!errors?.email} className="mb-6 flex items-center">
+            <FormLabel className={darkMode ? "w-20" : "w-20 text-grayModern-700"} htmlFor="email">
+              {t("AuthPanel.Email")}
+            </FormLabel>
+            <InputGroup>
+              <Input
+                {...register("email", {
+                  required: true,
+                  pattern: {
+                    value: /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/,
+                    message: t("AuthPanel.EmailTip"),
+                  },
+                })}
+                type="email"
+                id="email"
+                placeholder={t("AuthPanel.EmailPlaceholder") || ""}
+                bg={darkMode ? "#363C42" : "#F8FAFB"}
+                border={darkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+                height="48px"
+                rounded="4px"
+              />
+              <InputRightElement width="6rem" height="100%">
+                <Button
+                  className="w-20"
+                  variant={isSendSmsCode ? "text_disabled" : "text"}
+                  onClick={handleSendSmsCode}
+                >
+                  {isSendSmsCode ? `${countdown}s` : t("AuthPanel.getValidationCode")}
+                </Button>
+              </InputRightElement>
+            </InputGroup>
+          </FormControl>
+        )}
+        {(isNeedPhone || isNeedEmail) && (
           <FormControl isInvalid={!!errors.validationCode} className="mb-10 flex items-center">
-            <FormLabel className="w-20" htmlFor="validationCode">
+            <FormLabel
+              className={darkMode ? "w-20" : "w-20 text-grayModern-700"}
+              htmlFor="validationCode"
+            >
               {t("AuthPanel.ValidationCode")}
             </FormLabel>
             <Input
@@ -269,8 +386,10 @@ export default function SignUp() {
               })}
               id="validationCode"
               placeholder={t("AuthPanel.ValidationCodePlaceholder") || ""}
-              bg={"#F8FAFB"}
-              border={"1px solid #D5D6E1"}
+              bg={darkMode ? "#363C42" : "#F8FAFB"}
+              border={darkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+              height="48px"
+              rounded="4px"
             />
           </FormControl>
         )}
@@ -298,15 +417,19 @@ export default function SignUp() {
         <div className="mb-6">
           <Button
             type="submit"
-            className="w-full pb-5 pt-5"
+            className="!h-[42px] w-full !bg-primary-500 hover:!bg-primary-600"
             isLoading={signupMutation.isLoading}
             onClick={handleSubmit(onSubmit)}
           >
             {t("AuthPanel.Register")}
           </Button>
         </div>
-        <div className="mt-2 flex justify-end">
-          <Button size="xs" variant={"text"} onClick={() => navigate("/login", { replace: true })}>
+        <div className="mt-5 flex justify-end">
+          <Button
+            className="!px-2 text-lg"
+            variant={"text"}
+            onClick={() => navigate("/login", { replace: true })}
+          >
             {t("AuthPanel.ToLogin")}
           </Button>
         </div>

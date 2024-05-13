@@ -7,7 +7,19 @@ declare namespace Definitions {
     tags?: string[];
   };
 
-  export type CloudFunction = {};
+  export type CloudFunction = {
+    _id?: string;
+    appid?: string;
+    name?: string;
+    source?: Definitions.CloudFunctionSource;
+    desc?: string;
+    tags?: string[];
+    methods?: string[];
+    params?: {};
+    createdAt?: string;
+    updatedAt?: string;
+    createdBy?: string;
+  };
 
   export type UpdateFunctionDto = {
     newName?: string /* Function name is unique in the application */;
@@ -15,6 +27,7 @@ declare namespace Definitions {
     methods?: string[];
     code?: string /* The source code of the function */;
     tags?: string[];
+    changelog?: string;
   };
 
   export type UpdateFunctionDebugDto = {
@@ -31,6 +44,7 @@ declare namespace Definitions {
     databaseCapacity?: number;
     storageCapacity?: number;
     autoscaling?: Definitions.CreateAutoscalingDto;
+    dedicatedDatabase?: Definitions.CreateDedicatedDatabaseDto;
     name?: string;
     state?: string;
     regionId?: string;
@@ -84,6 +98,7 @@ declare namespace Definitions {
     databaseCapacity?: number;
     storageCapacity?: number;
     autoscaling?: Definitions.CreateAutoscalingDto;
+    dedicatedDatabase?: Definitions.CreateDedicatedDatabaseDto;
   };
 
   export type ApplicationBundle = {
@@ -114,6 +129,16 @@ declare namespace Definitions {
   export type CreateEnvironmentDto = {
     name?: string;
     value?: string;
+  };
+
+  export type PodNameListDto = {
+    appid?: string;
+    podNameList?: string[] /* List of pod identifiers */;
+  };
+
+  export type ContainerNameListDto = {
+    podName?: string;
+    containerNameList?: string[] /* List of container identifiers */;
   };
 
   export type CreateBucketDto = {
@@ -190,6 +215,7 @@ declare namespace Definitions {
 
   export type Account = {
     _id?: string;
+    owedAt?: string /* The timestamp when the account became owed */;
     balance?: number;
     state?: string;
     createdAt?: string;
@@ -248,8 +274,8 @@ declare namespace Definitions {
     username?: string /* username, 3-64 characters */;
     password?: string /* password, 8-64 characters */;
     phone?: string /* phone */;
+    email?: string /* email */;
     code?: string /* verify code */;
-    type?: string /* type */;
     inviteCode?: string /* invite code */;
   };
 
@@ -261,8 +287,8 @@ declare namespace Definitions {
   export type PasswdResetDto = {
     password?: string /* new password, 8-64 characters */;
     phone?: string /* phone */;
+    email?: string /* email */;
     code?: string /* verify code */;
-    type?: string /* type */;
   };
 
   export type PasswdCheckDto = {
@@ -286,9 +312,26 @@ declare namespace Definitions {
     pat?: string /* PAT */;
   };
 
-  export type CreatePATDto = {
-    name?: string;
-    expiresIn?: number;
+  export type SendEmailCodeDto = {
+    email?: string;
+    type?: string /* verify code type */;
+  };
+
+  export type EmailSigninDto = {
+    email?: string /* email */;
+    code?: string;
+    username?: string /* username */;
+    password?: string /* password, 8-64 characters */;
+    inviteCode?: string /* invite code */;
+  };
+
+  export type GithubSigninDto = {
+    code?: string;
+  };
+
+  export type GithubBind = {
+    token?: string /* temporary token signed for github bindings */;
+    isRegister?: boolean /* Is a newly registered use */;
   };
 
   export type UserWithProfile = {
@@ -296,9 +339,15 @@ declare namespace Definitions {
     username?: string;
     email?: string;
     phone?: string;
+    github?: number;
     createdAt?: string;
     updatedAt?: string;
     profile?: Definitions.UserProfile;
+  };
+
+  export type CreatePATDto = {
+    name?: string;
+    expiresIn?: number;
   };
 
   export type BindPhoneDto = {
@@ -308,8 +357,17 @@ declare namespace Definitions {
     newSmsCode?: string /* sms verify code for new phone number */;
   };
 
+  export type BindEmailDto = {
+    email?: string;
+    code?: string /* verify code */;
+  };
+
   export type BindUsernameDto = {
     username?: string /* username */;
+  };
+
+  export type DeleteDependencyDto = {
+    name?: string;
   };
 
   export type CreateTriggerDto = {
@@ -318,22 +376,21 @@ declare namespace Definitions {
     target?: string;
   };
 
-  export type DeleteDependencyDto = {
-    name?: string;
-  };
-
   export type CalculatePriceDto = {
     cpu?: number;
     memory?: number;
     databaseCapacity?: number;
     storageCapacity?: number;
     autoscaling?: Definitions.CreateAutoscalingDto;
+    dedicatedDatabase?: Definitions.CreateDedicatedDatabaseDto;
+    networkTraffic?: number;
     regionId?: string;
   };
 
   export type CalculatePriceResultDto = {
     cpu?: number;
     memory?: number;
+    networkTraffic?: number;
     storageCapacity?: number;
     databaseCapacity?: number;
     total?: number;
@@ -358,6 +415,73 @@ declare namespace Definitions {
     items?: Definitions.FunctionTemplateItemDto[] /* items of the function template */;
   };
 
+  export type DeleteRecycleBinItemsDto = {
+    ids?: string[] /* The list of item ids */;
+  };
+
+  export type RestoreRecycleBinItemsDto = {
+    ids?: string[] /* The list of item ids */;
+  };
+
+  export type Group = {
+    _id?: string;
+    name?: string;
+    appid?: string;
+    createdBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+
+  export type GetGroupInviteCodeDetailDto = {
+    group?: Definitions.Group;
+    invitedBy?: Definitions.User;
+  };
+
+  export type CreateGroupDto = {
+    name?: string;
+  };
+
+  export type UpdateGroupDto = {
+    name?: string;
+  };
+
+  export type GenerateGroupInviteCodeDto = {
+    role?: string;
+  };
+
+  export type GroupInviteCode = {
+    _id?: string;
+    usedBy?: string;
+    code?: string;
+    role?: string;
+    groupId?: string;
+    createdBy?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+
+  export type GroupMember = {
+    _id?: string;
+    uid?: string;
+    groupId?: string;
+    role?: string;
+    createdAt?: string;
+    updatedAt?: string;
+  };
+
+  export type UpdateGroupMemberRoleDto = {
+    role?: string;
+  };
+
+  export type CloudFunctionSource = {
+    code?: string;
+    compiled?: string;
+    uri?: string;
+    version?: number;
+    hash?: string;
+    lang?: string;
+  };
+
   export type CreateAutoscalingDto = {
     enable?: boolean;
     minReplicas?: number;
@@ -366,11 +490,17 @@ declare namespace Definitions {
     targetMemoryUtilizationPercentage?: number;
   };
 
+  export type CreateDedicatedDatabaseDto = {
+    cpu?: number;
+    memory?: number;
+    capacity?: number;
+    replicas?: number;
+  };
+
   export type Region = {
     _id?: string;
     name?: string;
     displayName?: string;
-    tls?: boolean;
     state?: string;
     createdAt?: string;
     updatedAt?: string;
@@ -387,6 +517,14 @@ declare namespace Definitions {
     limitCountOfTrigger?: number;
     limitCountOfWebsiteHosting?: number;
     reservedTimeAfterExpired?: number;
+    dedicatedDatabase?: Definitions.DedicatedDatabaseSpec;
+  };
+
+  export type DedicatedDatabaseSpec = {
+    limitCPU?: number;
+    limitMemory?: number;
+    capacity?: number;
+    replicas?: number;
   };
 
   export type Autoscaling = {
@@ -437,8 +575,15 @@ declare namespace Definitions {
     openData?: {};
     avatar?: string;
     name?: string;
+    idVerified?: Definitions.IdVerified;
+    idCard?: string;
     createdAt?: string;
     updatedAt?: string;
+  };
+
+  export type IdVerified = {
+    isVerified?: boolean;
+    idVerifyFailedTimes?: number;
   };
 
   export type CreateDependencyDto = {
@@ -452,16 +597,27 @@ declare namespace Definitions {
     methods?: string[];
     code?: string /* The source code of the function */;
   };
+
+  export type User = {
+    _id?: string;
+    username?: string;
+    email?: string;
+    phone?: string;
+    github?: number;
+    createdAt?: string;
+    updatedAt?: string;
+  };
 }
 
 declare namespace Paths {
   namespace AppControllerGetRuntimes {
     export type QueryParameters = any;
 
-    export type BodyParameters = Definitions.CreateFunctionDto;
+    export type BodyParameters = any;
 
     export type Responses = any;
   }
+
   namespace FunctionControllerCreate {
     export type QueryParameters = any;
 
@@ -638,6 +794,22 @@ declare namespace Paths {
     export type Responses = any;
   }
 
+  namespace PodControllerGetPodNameList {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace PodControllerGetContainerNameList {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
   namespace BucketControllerCreate {
     export type QueryParameters = any;
 
@@ -758,6 +930,22 @@ declare namespace Paths {
     export type Responses = any;
   }
 
+  namespace DatabaseControllerExportDatabase {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace DatabaseControllerImportDatabase {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
   namespace PolicyRuleControllerCreate {
     export type QueryParameters = any;
 
@@ -790,6 +978,30 @@ declare namespace Paths {
     export type Responses = any;
   }
 
+  namespace DedicatedDatabaseMonitorControllerGetResource {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace DedicatedDatabaseMonitorControllerGetConnection {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace DedicatedDatabaseMonitorControllerGetPerformance {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
   namespace AccountControllerFindOne {
     export type QueryParameters = any;
 
@@ -814,7 +1026,7 @@ declare namespace Paths {
     export type Responses = any;
   }
 
-  namespace AccountControllerChargeRecord {
+  namespace AccountControllerGetChargeRecords {
     export type QueryParameters = any;
 
     export type BodyParameters = any;
@@ -982,6 +1194,54 @@ declare namespace Paths {
     export type Responses = any;
   }
 
+  namespace EmailControllerSendCode {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.SendEmailCodeDto;
+
+    export type Responses = any;
+  }
+
+  namespace EmailControllerSignin {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.EmailSigninDto;
+
+    export type Responses = any;
+  }
+
+  namespace GithubAuthControllerJumpLogin {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GithubAuthControllerSignin {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.GithubSigninDto;
+
+    export type Responses = any;
+  }
+
+  namespace GithubAuthControllerBind {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.GithubBind;
+
+    export type Responses = any;
+  }
+
+  namespace GithubAuthControllerUnbind {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
   namespace PatControllerCreate {
     export type QueryParameters = any;
 
@@ -1030,6 +1290,14 @@ declare namespace Paths {
     export type Responses = any;
   }
 
+  namespace UserControllerBindEmail {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.BindEmailDto;
+
+    export type Responses = any;
+  }
+
   namespace UserControllerBindUsername {
     export type QueryParameters = any;
 
@@ -1046,31 +1314,15 @@ declare namespace Paths {
     export type Responses = any;
   }
 
-  namespace TriggerControllerCreate {
-    export type QueryParameters = any;
-
-    export type BodyParameters = Definitions.CreateTriggerDto;
-
-    export type Responses = any;
-  }
-
-  namespace TriggerControllerFindAll {
-    export type QueryParameters = any;
-
-    export type BodyParameters = any;
-
-    export type Responses = any;
-  }
-
-  namespace TriggerControllerRemove {
-    export type QueryParameters = any;
-
-    export type BodyParameters = any;
-
-    export type Responses = any;
-  }
-
   namespace LogControllerGetLogs {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace LogControllerStreamLogs {
     export type QueryParameters = any;
 
     export type BodyParameters = any;
@@ -1106,6 +1358,30 @@ declare namespace Paths {
     export type QueryParameters = any;
 
     export type BodyParameters = Definitions.DeleteDependencyDto;
+
+    export type Responses = any;
+  }
+
+  namespace TriggerControllerCreate {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.CreateTriggerDto;
+
+    export type Responses = any;
+  }
+
+  namespace TriggerControllerFindAll {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace TriggerControllerRemove {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
 
     export type Responses = any;
   }
@@ -1271,6 +1547,174 @@ declare namespace Paths {
   }
 
   namespace FunctionTemplateControllerGetRecommendFunctionTemplate {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace FunctionRecycleBinControllerDeleteRecycleBinItems {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.DeleteRecycleBinItemsDto;
+
+    export type Responses = any;
+  }
+
+  namespace FunctionRecycleBinControllerEmptyRecycleBin {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace FunctionRecycleBinControllerGetRecycleBin {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace FunctionRecycleBinControllerRestoreRecycleBinItems {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.RestoreRecycleBinItemsDto;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerFindGroupByAppId {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerFindGroupByInviteCode {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerFindAll {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerCreate {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.CreateGroupDto;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerDelete {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerFindOne {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupControllerUpdateGroup {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.UpdateGroupDto;
+
+    export type Responses = any;
+  }
+
+  namespace GroupInviteControllerGetInviteCode {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupInviteControllerGenerateInviteCode {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.GenerateGroupInviteCodeDto;
+
+    export type Responses = any;
+  }
+
+  namespace GroupInviteControllerDeleteInviteCode {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupMemberControllerFindMembers {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupMemberControllerAddMember {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupMemberControllerRemoveMember {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace GroupMemberControllerUpdateMemberRole {
+    export type QueryParameters = any;
+
+    export type BodyParameters = Definitions.UpdateGroupMemberRoleDto;
+
+    export type Responses = any;
+  }
+
+  namespace GroupMemberControllerLeaveGroup {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace MonitorControllerGetData {
+    export type QueryParameters = any;
+
+    export type BodyParameters = any;
+
+    export type Responses = any;
+  }
+
+  namespace NotificationControllerFindAll {
     export type QueryParameters = any;
 
     export type BodyParameters = any;

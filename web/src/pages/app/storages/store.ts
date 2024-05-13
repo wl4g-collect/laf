@@ -24,11 +24,14 @@ export type TFile = {
 type State = {
   currentStorage?: TBucket | undefined;
   setCurrentStorage: (currentStorage: TBucket | undefined) => void;
+  markerArray: string[];
+  setMarkerArray: (markerArray: string[]) => void;
   prefix?: string;
   setPrefix: (prefix: string) => void;
   maxStorage: number;
   setMaxStorage: (number: number) => void;
   getOrigin: (origin: string) => string;
+  getFilePath: (bucket: string, file: string) => string;
 };
 
 const useStorageStore = create<State>()(
@@ -38,6 +41,11 @@ const useStorageStore = create<State>()(
       setCurrentStorage: (currentStorage) =>
         set((state) => {
           state.currentStorage = currentStorage;
+        }),
+      markerArray: [],
+      setMarkerArray: (markerArray) =>
+        set((state) => {
+          state.markerArray = markerArray;
         }),
       prefix: "/",
       setPrefix: (prefix) =>
@@ -53,6 +61,11 @@ const useStorageStore = create<State>()(
       getOrigin: (domain: string) => {
         const currentApp = useGlobalStore.getState().currentApp;
         return `${currentApp?.tls ? "https" : "http"}://${domain}${formatPort(currentApp?.port)}`;
+      },
+
+      getFilePath: (bucket: string, file: string) => {
+        const currentApp = useGlobalStore.getState().currentApp;
+        return `${currentApp.storage.endpoint}/${bucket}/${file}`;
       },
     })),
   ),

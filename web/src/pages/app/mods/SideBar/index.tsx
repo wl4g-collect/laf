@@ -2,7 +2,7 @@
  * cloud functions SideBar menu
  ***************************/
 
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { NavLink, useParams } from "react-router-dom";
 import { Center } from "@chakra-ui/react";
 import clsx from "clsx";
 import { t } from "i18next";
@@ -26,8 +26,7 @@ type TIcon = {
 };
 export default function SideBar() {
   const { pageId } = useParams();
-  const navigate = useNavigate();
-  const { currentApp, setCurrentPage, userInfo, regions = [] } = useGlobalStore();
+  const { currentApp, setCurrentPage, userInfo, avatarUpdatedAt, regions = [] } = useGlobalStore();
   const currentRegion =
     regions.find((item: any) => item._id === currentApp?.regionId) || regions[0];
 
@@ -56,11 +55,6 @@ export default function SideBar() {
       name: String(t("StoragePanel.Storage")),
       icon: <Icons type="storage" />,
     },
-    {
-      pageId: Pages.logs,
-      name: String(t("LogPanel.Log")),
-      icon: <Icons type="logs" />,
-    },
   ];
 
   const BOTTOM_ICONS: TIcon[] = [
@@ -69,7 +63,7 @@ export default function SideBar() {
       component: (
         <UserSetting
           name={userInfo?.username || ""}
-          avatar={getAvatarUrl(userInfo?._id || "")}
+          avatar={getAvatarUrl(userInfo?._id, avatarUpdatedAt)}
           width={"28px"}
         />
       ),
@@ -96,20 +90,9 @@ export default function SideBar() {
             {icons.map((item) => {
               if (item.pageId === "nav") {
                 return (
-                  <Center
-                    key={item.pageId}
-                    style={{
-                      height: 40,
-                      marginTop: 12,
-                      marginBottom: 24,
-                    }}
-                    className="cursor-pointer"
-                    onClick={() => {
-                      navigate(Routes.dashboard);
-                    }}
-                  >
+                  <a key={item.pageId} href={Routes.dashboard}>
                     {item.icon}
-                  </Center>
+                  </a>
                 );
               }
               if (item.icon) {
@@ -117,7 +100,7 @@ export default function SideBar() {
                   <NavLink
                     to={`/app/${currentApp?.appid}/${item.pageId}`}
                     key={item.pageId}
-                    className={clsx(styles.icon, " mx-2 items-center ", {
+                    className={clsx(styles.icon, " mx-1 items-center ", {
                       [styles.current]: pageId === item.pageId,
                       "my-4": item.name !== undefined,
                     })}
@@ -128,20 +111,20 @@ export default function SideBar() {
                     }}
                   >
                     {item.icon}
-                    <p className="scale-90">{item.name ? item.name : null}</p>
+                    <p className="scale-[.75]">{item.name ? item.name : null}</p>
                   </NavLink>
                 );
               }
               return (
                 <Center
                   key={item.pageId}
-                  className={clsx(styles.icon, " mx-2 items-center ", {
+                  className={clsx(styles.icon, " mx-1 items-center ", {
                     [styles.current]: pageId === item.pageId,
                     "my-4": item.name !== undefined,
                   })}
                 >
                   {item.component}
-                  <p className="scale-90">{item.name ? item.name : null}</p>
+                  <p className="scale-[.75]">{item.name ? item.name : null}</p>
                 </Center>
               );
             })}

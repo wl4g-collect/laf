@@ -42,9 +42,7 @@ export class RuntimeDomainService {
   async checkResolved(appid: string, customDomain: string) {
     const runtimeDomain = await this.db
       .collection<RuntimeDomain>('RuntimeDomain')
-      .findOne({
-        appid,
-      })
+      .findOne({ appid })
 
     const cnameTarget = runtimeDomain.domain
 
@@ -121,7 +119,13 @@ export class RuntimeDomainService {
       .collection<RuntimeDomain>('RuntimeDomain')
       .findOneAndUpdate(
         { appid: appid },
-        { $set: { state: DomainState.Deleted, updatedAt: new Date() } },
+        {
+          $set: {
+            state: DomainState.Deleted,
+            phase: DomainPhase.Deleting,
+            updatedAt: new Date(),
+          },
+        },
         { returnDocument: 'after' },
       )
 

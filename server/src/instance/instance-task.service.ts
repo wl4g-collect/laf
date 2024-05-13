@@ -4,12 +4,20 @@ import { isConditionTrue } from '../utils/getter'
 import { InstanceService } from './instance.service'
 import { ServerConfig, TASK_LOCK_INIT_TIME } from 'src/constants'
 import { SystemDatabase } from 'src/system-database'
-import { CronJobService } from 'src/trigger/cron-job.service'
 import {
   Application,
   ApplicationPhase,
   ApplicationState,
 } from 'src/application/entities/application'
+import { DomainState, RuntimeDomain } from 'src/gateway/entities/runtime-domain'
+import { BucketDomain } from 'src/gateway/entities/bucket-domain'
+import { WebsiteHosting } from 'src/website/entities/website'
+import { CronTrigger, TriggerState } from 'src/trigger/entities/cron-trigger'
+import { DedicatedDatabaseService } from 'src/database/dedicated-database/dedicated-database.service'
+import {
+  DedicatedDatabasePhase,
+  DedicatedDatabaseState,
+} from 'src/database/entities/dedicated-database'
 
 @Injectable()
 export class InstanceTaskService {
@@ -18,7 +26,7 @@ export class InstanceTaskService {
 
   constructor(
     private readonly instanceService: InstanceService,
-    private readonly cronService: CronJobService,
+    private readonly dedicatedDatabaseService: DedicatedDatabaseService,
   ) {}
 
   @Cron(CronExpression.EVERY_SECOND)
@@ -103,9 +111,6 @@ export class InstanceTaskService {
     if (!res.value) return
     const app = res.value
 
-    // create instance
-    await this.instanceService.create(app.appid)
-
     // if waiting time is more than 5 minutes, stop the application
     const waitingTime = Date.now() - app.updatedAt.getTime()
     if (waitingTime > 1000 * 60 * 5) {
@@ -125,7 +130,28 @@ export class InstanceTaskService {
       return
     }
 
+    // create instance
+    await this.instanceService.create(app.appid)
+
     const appid = app.appid
+
+    const ddb = await this.dedicatedDatabaseService.findOne(appid)
+    if (ddb) {
+      if (ddb.state === DedicatedDatabaseState.Stopped) {
+        await this.dedicatedDatabaseService.updateState(
+          appid,
+          DedicatedDatabaseState.Running,
+        )
+        await this.relock(appid, waitingTime)
+        return
+      }
+
+      if (ddb.phase !== DedicatedDatabasePhase.Started) {
+        await this.relock(appid, waitingTime)
+        return
+      }
+    }
+
     const instance = await this.instanceService.get(appid)
     const unavailable =
       instance.deployment?.status?.unavailableReplicas || false
@@ -148,8 +174,37 @@ export class InstanceTaskService {
       return
     }
 
-    // resume cronjobs if any
-    await this.cronService.resumeAll(app.appid)
+    // active runtime domain
+    await db
+      .collection<RuntimeDomain>('RuntimeDomain')
+      .updateOne(
+        { appid, state: DomainState.Inactive },
+        { $set: { state: DomainState.Active, updatedAt: new Date() } },
+      )
+
+    // active website domain
+    await db
+      .collection<WebsiteHosting>('WebsiteHosting')
+      .updateMany(
+        { appid, state: DomainState.Inactive },
+        { $set: { state: DomainState.Active, updatedAt: new Date() } },
+      )
+
+    // active bucket domain
+    await db
+      .collection<BucketDomain>('BucketDomain')
+      .updateMany(
+        { appid, state: DomainState.Inactive },
+        { $set: { state: DomainState.Active, updatedAt: new Date() } },
+      )
+
+    // active triggers if any
+    await db
+      .collection<CronTrigger>('CronTrigger')
+      .updateMany(
+        { appid, state: TriggerState.Inactive },
+        { $set: { state: TriggerState.Active, updatedAt: new Date() } },
+      )
 
     // if state is `Restarting`, update state to `Running` with phase `Started`
     let toState = app.state
@@ -221,6 +276,48 @@ export class InstanceTaskService {
 
     const waitingTime = Date.now() - app.updatedAt.getTime()
 
+    // inactive runtime domain
+    await db
+      .collection<RuntimeDomain>('RuntimeDomain')
+      .updateOne(
+        { appid, state: DomainState.Active },
+        { $set: { state: DomainState.Inactive, updatedAt: new Date() } },
+      )
+
+    // inactive website domain
+    await db
+      .collection<WebsiteHosting>('WebsiteHosting')
+      .updateMany(
+        { appid, state: DomainState.Active },
+        { $set: { state: DomainState.Inactive, updatedAt: new Date() } },
+      )
+
+    // inactive bucket domain
+    await db
+      .collection<BucketDomain>('BucketDomain')
+      .updateMany(
+        { appid, state: DomainState.Active },
+        { $set: { state: DomainState.Inactive, updatedAt: new Date() } },
+      )
+
+    // inactive triggers if any
+    await db
+      .collection<CronTrigger>('CronTrigger')
+      .updateMany(
+        { appid, state: TriggerState.Active },
+        { $set: { state: TriggerState.Inactive, updatedAt: new Date() } },
+      )
+
+    const ddb = await this.dedicatedDatabaseService.findOne(appid)
+    if (ddb && ddb.state !== DedicatedDatabaseState.Stopped) {
+      await this.dedicatedDatabaseService.updateState(
+        appid,
+        DedicatedDatabaseState.Stopped,
+      )
+      await this.relock(appid, waitingTime)
+      return
+    }
+
     // check if the instance is removed
     const instance = await this.instanceService.get(app.appid)
     if (instance.deployment) {
@@ -235,9 +332,6 @@ export class InstanceTaskService {
       await this.relock(appid, waitingTime)
       return
     }
-
-    // suspend cronjobs if any
-    await this.cronService.suspendAll(app.appid)
 
     // update application phase to `Stopped`
     await db.collection<Application>('Application').updateOne(
@@ -278,6 +372,11 @@ export class InstanceTaskService {
     if (!res.value) return
     const app = res.value
 
+    await this.dedicatedDatabaseService.updateState(
+      app.appid,
+      DedicatedDatabaseState.Restarting,
+    )
+
     await this.instanceService.restart(app.appid)
 
     // update application phase to `Starting`
@@ -316,5 +415,14 @@ export class InstanceTaskService {
     await db
       .collection<Application>('Application')
       .updateOne({ appid: appid }, { $set: { lockedAt } })
+  }
+
+  private getHourTime() {
+    const latestTime = new Date()
+    latestTime.setMinutes(0)
+    latestTime.setSeconds(0)
+    latestTime.setMilliseconds(0)
+    latestTime.setHours(latestTime.getHours())
+    return latestTime
   }
 }

@@ -16,14 +16,31 @@ import { WebsiteService } from 'src/website/website.service'
 import { AccountModule } from 'src/account/account.module'
 import { BundleService } from './bundle.service'
 import { ResourceService } from 'src/billing/resource.service'
+import { FunctionRecycleBinService } from 'src/recycle-bin/cloud-function/function-recycle-bin.service'
+import { HttpModule } from '@nestjs/axios'
+import { QuotaService } from 'src/user/quota.service'
+import { SettingService } from 'src/setting/setting.service'
+import { PodService } from './pod.service'
+import { PodController } from './pod.controller'
 
 @Module({
-  imports: [StorageModule, DatabaseModule, GatewayModule, AccountModule],
-  controllers: [ApplicationController, EnvironmentVariableController],
+  imports: [
+    StorageModule,
+    DatabaseModule,
+    GatewayModule,
+    AccountModule,
+    HttpModule,
+  ],
+  controllers: [
+    ApplicationController,
+    EnvironmentVariableController,
+    PodController,
+  ],
   providers: [
     ApplicationService,
     ApplicationTaskService,
     InstanceService,
+    FunctionRecycleBinService,
     JwtService,
     FunctionService,
     EnvironmentVariableService,
@@ -32,12 +49,16 @@ import { ResourceService } from 'src/billing/resource.service'
     WebsiteService,
     BundleService,
     ResourceService,
+    QuotaService,
+    SettingService,
+    PodService,
   ],
   exports: [
     ApplicationService,
     ApplicationConfigurationService,
     EnvironmentVariableService,
     BundleService,
+    PodService,
   ],
 })
 export class ApplicationModule {}

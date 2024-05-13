@@ -24,6 +24,15 @@ import { BillingModule } from './billing/billing.module'
 import { AuthenticationModule } from './authentication/authentication.module'
 import { FunctionTemplateModule } from './function-template/function-template.module'
 import { MulterModule } from '@nestjs/platform-express'
+import { RecycleBinModule } from './recycle-bin/recycle-bin.module'
+import { GroupModule } from './group/group.module'
+import { APP_INTERCEPTOR } from '@nestjs/core'
+import { AppInterceptor } from './app.interceptor'
+import { InterceptorModule } from './interceptor/interceptor.module'
+import { MonitorModule } from './monitor/monitor.module'
+import { NotificationModule } from './notification/notification.module'
+import { ServerConfig } from './constants'
+import { EventEmitterModule } from '@nestjs/event-emitter'
 
 @Module({
   imports: [
@@ -49,10 +58,10 @@ import { MulterModule } from '@nestjs/platform-express'
     AccountModule,
     SettingModule,
     I18nModule.forRoot({
-      fallbackLanguage: 'en',
+      fallbackLanguage: ServerConfig.DEFAULT_LANGUAGE,
       loaderOptions: {
         path: path.join(__dirname, '/i18n/'),
-        watch: true,
+        watch: false,
       },
       resolvers: [
         { use: QueryResolver, options: ['lang'] },
@@ -66,8 +75,17 @@ import { MulterModule } from '@nestjs/platform-express'
     BillingModule,
     FunctionTemplateModule,
     MulterModule.register(),
+    RecycleBinModule,
+    GroupModule,
+    InterceptorModule,
+    MonitorModule,
+    NotificationModule,
+    EventEmitterModule.forRoot(),
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    { provide: APP_INTERCEPTOR, useClass: AppInterceptor },
+    AppService,
+  ],
 })
 export class AppModule {}

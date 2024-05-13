@@ -1,6 +1,6 @@
 import { ChangeEventHandler, useMemo, useState } from "react";
 import { DateRange, DayPicker, SelectRangeEventHandler } from "react-day-picker";
-import { CalendarIcon } from "@chakra-ui/icons";
+import { useTranslation } from "react-i18next";
 import {
   Box,
   Button,
@@ -12,7 +12,11 @@ import {
 } from "@chakra-ui/react";
 import clsx from "clsx";
 import { format, isAfter, isBefore, isValid, parse } from "date-fns";
+import { es, zhCN } from "date-fns/locale";
 
+import { CalendarIcon } from "../CommonIcon";
+
+import "./index.css";
 import "react-day-picker/dist/style.css";
 
 export default function DateRangePicker(props: {
@@ -27,6 +31,7 @@ export default function DateRangePicker(props: {
   const [fromValue, setFromValue] = useState<string>(format(initState.from, "y-MM-dd"));
   const [toValue, setToValue] = useState<string>(format(initState.to, "y-MM-dd"));
   const darkMode = useColorMode().colorMode === "dark";
+  const { i18n } = useTranslation();
   const onClose = () => {
     selectedRange.from && setStartTime(selectedRange.from);
     selectedRange.to && setEndTime(selectedRange.to);
@@ -76,8 +81,8 @@ export default function DateRangePicker(props: {
   return (
     <div
       className={clsx(
-        "flex h-8 w-64 rounded-md border border-grayModern-200",
-        !darkMode && "bg-grayModern-100",
+        "flex h-8 w-64 rounded-md border border-frostyNightfall-200",
+        !darkMode && "bg-lafWhite-500",
       )}
     >
       <Input
@@ -95,13 +100,14 @@ export default function DateRangePicker(props: {
       />
       <Popover onClose={onClose}>
         <PopoverTrigger>
-          <Button display={"flex"} variant={"unstyled"}>
-            <CalendarIcon />
+          <Button variant="none" px={0} mr={2} minW={4}>
+            <CalendarIcon className="pb-[2px] !text-grayModern-500" fontSize="18" />
           </Button>
         </PopoverTrigger>
         <PopoverContent zIndex={99}>
           <DayPicker
             mode="range"
+            locale={i18n.language === "en" ? es : zhCN}
             selected={selectedRange}
             onSelect={handleRangeSelect}
             styles={{

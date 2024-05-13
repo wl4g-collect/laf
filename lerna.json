@@ -5,9 +5,11 @@
     "./server",
     "./web",
     "./runtimes/nodejs",
-    "./cli"
+    "./cli",
+    "./services/*",
+    "./e2e"
   ],
-  "version": "1.0.0-beta.10",
+  "version": "1.0.0",
   "command": {
     "publish": {
       "ignoreChanges": [

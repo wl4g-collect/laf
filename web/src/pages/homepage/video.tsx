@@ -1,11 +1,10 @@
-import { useTranslation } from "react-i18next";
+import { site_url } from "@/constants";
 
 export default function Video() {
-  const { t } = useTranslation();
   return (
     <>
       <video autoPlay controls>
-        <source src={String(t("HomePage.VideoLink"))} type="video/mp4" />
+        <source src={site_url.laf_index_video} type="video/mp4" />
       </video>
     </>
   );

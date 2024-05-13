@@ -1,15 +1,21 @@
-
 import { Db } from './index'
 import { serialize } from './serializer/datatype'
 import { UpdateCommand } from './commands/update'
 import { ActionType } from './constant'
-import { AddRes, GetOneRes, RemoveRes, UpdateRes } from './result-types'
+import {
+  AddRes,
+  CreateIndexRes,
+  DropIndexRes,
+  GetOneRes,
+  ListIndexesRes,
+  RemoveRes,
+  UpdateRes,
+} from './result-types'
 import { ProjectionType } from './interface'
 import { Query } from './query'
 
-
 /**
- * Db document 
+ * Db document
  */
 export class DocumentReference {
   /**
@@ -57,11 +63,10 @@ export class DocumentReference {
     const params = {
       collectionName: this._coll,
       data: serialize(data),
-      multi: options?.multi ?? false
+      multi: options?.multi ?? false,
     }
 
-    const res = await this._query
-      .send(ActionType.add, params)
+    const res = await this._query.send(ActionType.add, params)
 
     if (res.error) {
       return {
@@ -70,7 +75,7 @@ export class DocumentReference {
         ok: false,
         id: undefined,
         insertedCount: undefined,
-        code: res.code
+        code: res.code,
       }
     }
 
@@ -78,7 +83,7 @@ export class DocumentReference {
       id: res.data._id || res.data[this._db.primaryKey],
       insertedCount: res.data.insertedCount,
       requestId: res.requestId,
-      ok: true
+      ok: true,
     }
   }
 
@@ -89,7 +94,7 @@ export class DocumentReference {
    *
    * @param data - document data
    */
-  async set(data: Object): Promise<UpdateRes> {
+  async set(data: object): Promise<UpdateRes> {
     if (!this.id) {
       throw new Error('document id cannot be empty')
     }
@@ -97,7 +102,7 @@ export class DocumentReference {
     let hasOperator = false
     const checkMixed = (objs: any) => {
       if (typeof objs === 'object') {
-        for (let key in objs) {
+        for (const key in objs) {
           if (objs[key] instanceof UpdateCommand) {
             hasOperator = true
           } else if (typeof objs[key] === 'object') {
@@ -126,7 +131,7 @@ export class DocumentReference {
    *
    * @param data - 文档数据
    */
-  async update(data: Object): Promise<UpdateRes> {
+  async update(data: object): Promise<UpdateRes> {
     // 把所有更新数据转为带操作符的
     const merge = true
     const options = { merge, multi: false, upsert: false }
@@ -163,6 +168,100 @@ export class DocumentReference {
    * @param projection
    */
   field(projection: string[] | ProjectionType): DocumentReference {
-    return new DocumentReference(this._db, this._coll, this.id, this._query.field(projection))
+    return new DocumentReference(
+      this._db,
+      this._coll,
+      this.id,
+      this._query.field(projection)
+    )
+  }
+
+  /**
+   * 创建索引
+   *
+   * @param data - document data
+   */
+  async createIndex(keys: object, options?: object): Promise<CreateIndexRes> {
+    if (typeof keys !== 'object' || Object.keys(keys)?.length === 0) {
+      throw new Error('keys cannot be empty object')
+    }
+
+    const data = {
+      keys,
+      options,
+    }
+
+    const params = {
+      collectionName: this._coll,
+      data: serialize(data),
+    }
+
+    const res = await this._query.send(ActionType.createIndex, params)
+
+    if (res.error) {
+      return {
+        requestId: res.requestId,
+        error: res.error,
+        ok: false,
+        code: res.code,
+        indexName: null,
+      }
+    }
+
+    return {
+      requestId: res.requestId,
+      ok: true,
+      indexName: res.data.indexName,
+    }
+  }
+
+  async dropIndex(index: string | object): Promise<DropIndexRes> {
+    const params = {
+      collectionName: this._coll,
+      data: serialize(index),
+    }
+
+    const res = await this._query.send(ActionType.dropIndex, params)
+
+    if (res.error) {
+      return {
+        requestId: res.requestId,
+        error: res.error,
+        ok: false,
+        code: res.code,
+        result: null,
+      }
+    }
+
+    return {
+      requestId: res.requestId,
+      ok: true,
+      result: res.data.result,
+    }
+  }
+
+  async listIndexes(options?: object): Promise<ListIndexesRes> {
+    const params = {
+      collectionName: this._coll,
+      data: serialize(options),
+    }
+
+    const res = await this._query.send(ActionType.listIndexes, params)
+
+    if (res.error) {
+      return {
+        requestId: res.requestId,
+        error: res.error,
+        ok: false,
+        code: res.code,
+        list: res.data.list,
+      }
+    }
+
+    return {
+      requestId: res.requestId,
+      ok: true,
+      list: res.data.list,
+    }
   }
 }

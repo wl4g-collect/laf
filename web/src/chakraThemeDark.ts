@@ -127,7 +127,14 @@ const Button = defineStyleConfig({
     text: {
       color: "primary.500",
       _hover: {
-        bg: "primary.100",
+        bg: "primary.900",
+      },
+    },
+
+    text_disabled: {
+      color: "grayModern.500",
+      _hover: {
+        cursor: "not-allowed",
       },
     },
 
@@ -234,6 +241,15 @@ const Input: ComponentStyleConfig = {
         paddingX: 0,
       },
     },
+
+    userInfo: {
+      field: {
+        background: "none",
+        border: "1px",
+        height: "32px",
+        borderColor: "#D5D6E1",
+      },
+    },
   },
   defaultProps: {
     size: "md",
@@ -282,6 +298,19 @@ const Table = {
         borderWidth: 1,
         borderColor: "lafDark.300",
         background: "lafDark.200",
+      },
+    },
+    params: {
+      parts: ["th", "td"],
+      th: {
+        borderWidth: 1,
+        borderColor: "grayModern.700",
+        background: "lafDark.300",
+      },
+      td: {
+        borderWidth: 1,
+        borderColor: "grayModern.700",
+        background: "lafDark.300",
       },
     },
   },

@@ -22,6 +22,7 @@ import { Row } from "@/components/Grid";
 import Panel from "@/components/Panel";
 import Resize from "@/components/Resize";
 import { COLOR_MODE, Pages, PanelMinHeight } from "@/constants";
+import { encodeData } from "@/utils/handleData";
 
 import { useCompileMutation, useUpdateDebugFunctionMutation } from "../../service";
 import useFunctionStore from "../../store";
@@ -37,21 +38,29 @@ import useFunctionCache from "@/hooks/useFunctionCache";
 import useHotKey, { DEFAULT_SHORTCUTS } from "@/hooks/useHotKey";
 import useCustomSettingStore from "@/pages/customSetting";
 import useGlobalStore from "@/pages/globalStore";
+import useSiteSettingStore from "@/pages/siteSetting";
 
 const HAS_BODY_PARAMS_METHODS: (TMethod | undefined)[] = ["POST", "PUT", "PATCH", "DELETE"];
 
-export default function DebugPanel(props: { containerRef: any; showOverlay: boolean }) {
+export default function DebugPanel(props: { containerRef: any }) {
   const { t } = useTranslation();
-  const { getFunctionUrl, currentFunction, setCurrentFunction, setCurrentRequestId } =
-    useFunctionStore((state: any) => state);
+  const {
+    getFunctionUrl,
+    currentFunction,
+    setCurrentRequestId,
+    setCurrentFuncLogs,
+    setCurrentFuncTimeUsage,
+  } = useFunctionStore((state: any) => state);
   const updateDebugFunctionMutation = useUpdateDebugFunctionMutation();
   const globalStore = useGlobalStore((state) => state);
+  const siteSettings = useSiteSettingStore((state) => state.siteSettings);
 
   const functionCache = useFunctionCache();
 
   const [runningResData, setRunningResData] = useState();
   const [isLoading, setIsLoading] = useState(false);
   const [runningMethod, setRunningMethod] = useState<TMethod>();
+  const [isHovered, setIsHovered] = useState(false);
 
   const compileMutation = useCompileMutation();
   const { colorMode } = useColorMode();
@@ -60,6 +69,8 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
   const [queryParams, setQueryParams] = useState([]);
   const [bodyParams, setBodyParams] = useState<{ contentType: string; data: any }>();
   const [headerParams, setHeaderParams] = useState([]);
+
+  const [abortController, setAbortController] = useState(new AbortController());
 
   const functionPageConfig = useCustomSettingStore((store) => store.layoutInfo.functionPage);
   const { displayName } = useHotKey(
@@ -72,11 +83,36 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
     },
   );
 
+  const methods_tab = [
+    {
+      label: "Query",
+      count: queryParams.length,
+      shouldRender: true,
+    },
+    {
+      label: "Body",
+      count: Object.keys(bodyParams?.data || {}).length,
+      shouldRender: HAS_BODY_PARAMS_METHODS.includes(runningMethod),
+    },
+    {
+      label: "Headers",
+      count: headerParams.length,
+      shouldRender: true,
+    },
+  ];
+
   useEffect(() => {
-    if (currentFunction?.methods) {
-      setRunningMethod(currentFunction.params?.runningMethod || currentFunction.methods[0]);
+    const lastRunningMethod = currentFunction.params?.runningMethod;
+    if (
+      currentFunction?.methods &&
+      lastRunningMethod &&
+      currentFunction.methods.includes(lastRunningMethod)
+    ) {
+      setRunningMethod(lastRunningMethod);
+    } else if (currentFunction?.methods) {
+      setRunningMethod(currentFunction.methods[0]);
     }
-  }, [setRunningMethod, currentFunction]);
+  }, [currentFunction]);
 
   useEffect(() => {
     setBodyParams(currentFunction?.params?.bodyParams);
@@ -98,36 +134,50 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
         runningMethod: runningMethod,
       };
 
-      updateDebugFunctionMutation.mutateAsync({
+      await updateDebugFunctionMutation.mutateAsync({
         name: currentFunction?.name,
         params: params,
       });
 
-      setCurrentFunction({ ...currentFunction, params: params });
-
       if (!compileRes.error) {
         const _funcData = JSON.stringify(compileRes.data);
-        const res = await axios({
+        const axiosInstance = axios.create({
+          validateStatus: function (status) {
+            return status === 500 ? true : status >= 200 && status < 300;
+          },
+        });
+        const signal = abortController.signal;
+        const res = await axiosInstance({
           url: getFunctionUrl(),
           method: runningMethod,
           params: mapValues(keyBy(queryParams, "name"), "value"),
           data: bodyParams?.data,
           headers: Object.assign(mapValues(keyBy(headerParams, "name"), "value"), {
             "x-laf-develop-token": `${globalStore.currentApp?.develop_token}`,
-            "x-laf-func-data": encodeURIComponent(_funcData),
+            "x-laf-debug-data": encodeData(_funcData),
             "Content-Type": bodyParams?.contentType || "application/json",
           }),
+          signal,
         });
 
         setCurrentRequestId(res.headers["request-id"]);
+        setCurrentFuncLogs(res.headers["x-laf-debug-logs"]);
+        setCurrentFuncTimeUsage(res.headers["x-laf-debug-time-usage"]);
 
         setRunningResData(res.data);
       }
+
+      return () => abortController.abort();
     } catch (error: any) {
       setRunningResData(error.toString());
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const cancelRequest = () => {
+    abortController.abort();
+    setAbortController(new AbortController());
   };
 
   return (
@@ -140,61 +190,58 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
           flexDirection={"column"}
           h="full"
           size={"sm"}
+          pt={"4px"}
         >
-          <TabList h={`${PanelMinHeight}px`}>
-            <Tab px="4">
-              <span
-                className={clsx("font-semibold", {
-                  "text-black": !darkMode,
-                  "text-white": darkMode,
-                })}
-              >
-                {t("FunctionPanel.InterfaceDebug")}
-              </span>
+          <TabList
+            h={`${PanelMinHeight}px`}
+            mx={3}
+            borderBottom={darkMode ? "" : "2px solid #F6F8F9"}
+          >
+            <Tab
+              _selected={{
+                borderColor: "primary.500",
+                color: darkMode ? "white !important" : "#262A32 !important",
+              }}
+              style={{ color: "#7B838B", margin: "-1px 8px", padding: "0 0", fontWeight: 500 }}
+            >
+              {t("FunctionPanel.InterfaceDebug")}
             </Tab>
-            {/* <Tab px="4">
-              <span
-                className={clsx("font-semibold", {
-                  "text-black": !darkMode,
-                  "text-white": darkMode,
-                })}
-              >
-                {t("HomePage.NavBar.docs")}
-              </span>
-            </Tab> */}
-            <Tab>
-              <span
-                className={clsx("font-semibold", {
-                  "text-black": !darkMode,
-                  "text-white": darkMode,
-                })}
+            {!!siteSettings.ai_pilot_url?.value && (
+              <Tab
+                _selected={{
+                  borderColor: "primary.500",
+                  color: darkMode ? "white !important" : "#262A32 !important",
+                }}
+                style={{ color: "#7B838B", margin: "-1px 8px", padding: "0 0", fontWeight: 500 }}
               >
                 Laf Pilot
-              </span>
-            </Tab>
-            <Tab>
-              <span
-                className={clsx("font-semibold", {
-                  "text-black": !darkMode,
-                  "text-white": darkMode,
-                })}
-              >
-                {t("FunctionPanel.versionHistory")}
-              </span>
+              </Tab>
+            )}
+            <Tab
+              _selected={{
+                borderColor: "primary.500",
+                color: darkMode ? "white !important" : "#262A32 !important",
+              }}
+              style={{ color: "#7B838B", margin: "-1px 8px", padding: "0 0", fontWeight: 500 }}
+            >
+              {t("FunctionPanel.versionHistory")}
             </Tab>
           </TabList>
 
           <TabPanels flex={1} className="overflow-hidden">
             <TabPanel
               padding={0}
+              mt="1px"
               h="full"
               className={
                 darkMode ? "flex flex-col bg-lafDark-100" : "flex flex-col bg-grayModern-100"
               }
             >
               <Panel className="flex-1 flex-col">
-                <div className="flex flex-none items-center px-2 py-4">
-                  <span className="mr-3 whitespace-nowrap">{t("FunctionPanel.Methods")}</span>
+                <div className="flex flex-none items-center px-2 pb-2 pt-3">
+                  <span className="mr-3 whitespace-nowrap font-medium text-grayModern-500">
+                    {t("FunctionPanel.Methods")}
+                  </span>
                   <Select
                     width="100px"
                     variant="filled"
@@ -213,52 +260,56 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
                       );
                     })}
                   </Select>
-                  <Tooltip label={`快捷键: ${displayName.toUpperCase()}`}>
+                  <Tooltip
+                    label={isLoading ? "" : `${t("shortcutKey")} ${displayName.toUpperCase()}`}
+                  >
                     <Button
-                      variant={"secondary"}
-                      size={"xs"}
                       disabled={getFunctionUrl() === ""}
-                      className="ml-2"
-                      onClick={() => runningCode()}
-                      isLoading={isLoading}
+                      className={clsx(
+                        "relative ml-2 !h-6 !w-14 !text-base",
+                        isLoading ? "!bg-primary-400" : "!bg-primary-600 ",
+                      )}
+                      onClick={() => (isLoading ? cancelRequest() : runningCode())}
+                      onMouseEnter={() => setIsHovered(true)}
+                      onMouseLeave={() => setIsHovered(false)}
                     >
-                      {t("FunctionPanel.Debug")}
+                      {isLoading ? (
+                        <>
+                          {isHovered ? (
+                            t("Cancel")
+                          ) : (
+                            <Center>
+                              <Spinner size={"xs"} />
+                            </Center>
+                          )}
+                        </>
+                      ) : (
+                        t("FunctionPanel.Debug")
+                      )}
                     </Button>
                   </Tooltip>
                 </div>
                 <div className="flex-grow overflow-hidden">
                   <Tabs
-                    p="0"
                     variant="soft-rounded"
                     colorScheme={"gray"}
                     size={"sm"}
                     className="h-full flex-col"
                     style={{ display: "flex" }}
                   >
-                    <TabList className="mb-1 flex-none">
-                      <Tab>
-                        Query
-                        {queryParams.length > 0 && (
-                          <span className="ml-1">({queryParams.length})</span>
-                        )}
-                      </Tab>
-                      {HAS_BODY_PARAMS_METHODS.includes(runningMethod) && (
-                        <Tab>
-                          Body
-                          {Object.keys(bodyParams?.data || {}).length > 0 && (
-                            <span className="ml-1">({Object.keys(bodyParams?.data).length})</span>
-                          )}
-                        </Tab>
+                    <TabList>
+                      {methods_tab.map(
+                        (tab, index) =>
+                          tab.shouldRender && (
+                            <Tab key={index} className="!font-medium">
+                              {tab.label}
+                              {tab.count > 0 && <span className="ml-1">({tab.count})</span>}
+                            </Tab>
+                          ),
                       )}
-                      <Tab>
-                        Headers
-                        {headerParams.length > 0 && (
-                          <span className="ml-1">({headerParams.length})</span>
-                        )}
-                      </Tab>
                     </TabList>
                     <TabPanels className="relative flex-1 overflow-auto">
-                      <TabPanel px={0} py={1}>
+                      <TabPanel px={0} py={2}>
                         <QueryParamsTab
                           key={"QueryParamsTab"}
                           onChange={(values: any) => {
@@ -271,7 +322,7 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
                       {HAS_BODY_PARAMS_METHODS.includes(runningMethod) && (
                         <TabPanel
                           px={0}
-                          py={1}
+                          py={2}
                           className="absolute bottom-0 left-0 right-0 top-0 overflow-auto"
                         >
                           <BodyParamsTab
@@ -283,7 +334,7 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
                         </TabPanel>
                       )}
 
-                      <TabPanel px={0} py={1}>
+                      <TabPanel px={0} py={2}>
                         <HeaderParamsTab
                           key={"HeaderParamsTab"}
                           onChange={(values: any) => {
@@ -310,21 +361,18 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
                     pageId="functionPage"
                     panelId="RunningPanel"
                   />
-                  <div className="relative flex-1 overflow-auto">
+                  <div className="h-full flex-1 overflow-auto">
                     {isLoading ? (
-                      <div className="absolute left-0 right-0">
-                        <Center>
-                          <Spinner />
-                        </Center>
-                      </div>
-                    ) : null}
-                    {runningResData ? (
+                      <Center className="h-full">
+                        <Spinner />
+                      </Center>
+                    ) : runningResData !== undefined ? (
                       <JSONViewer
                         colorMode={colorMode}
                         code={JSON.stringify(runningResData, null, 2)}
                       />
                     ) : (
-                      <Center minH={140} className="text-grayIron-600">
+                      <Center className="h-full text-grayIron-600">
                         {t("FunctionPanel.EmptyDebugTip")}
                       </Center>
                     )}
@@ -332,28 +380,11 @@ export default function DebugPanel(props: { containerRef: any; showOverlay: bool
                 </Panel>
               </Row>
             </TabPanel>
-            {/* <TabPanel padding={0} h="full">
-              {props.showOverlay && (
-                <div
-                  style={{
-                    position: "fixed",
-                    width: "100%",
-                    height: "100%",
-                    backgroundColor: "rgba(0, 0, 0, 0)",
-                    zIndex: 999,
-                  }}
-                />
-              )}
-              <iframe
-                title="docs"
-                height={"100%"}
-                width={"100%"}
-                src={String(t("HomePage.DocsLink"))}
-              />
-            </TabPanel> */}
-            <TabPanel padding={0} h="full">
-              <AIChatPanel />
-            </TabPanel>
+            {!!siteSettings.ai_pilot_url?.value && (
+              <TabPanel padding={0} h="full">
+                <AIChatPanel />
+              </TabPanel>
+            )}
             <TabPanel padding={0} h="full">
               <VersionHistoryPanel />
             </TabPanel>

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
 import {
   Button,
   FormControl,
@@ -12,9 +11,17 @@ import {
 } from "@chakra-ui/react";
 import { t } from "i18next";
 
-import { Routes } from "@/constants";
+import { OutlineViewOffIcon, OutlineViewOnIcon } from "@/components/CommonIcon";
+import { PROVIDER_NAME, Routes } from "@/constants";
 
-import { useSigninByPasswordMutation } from "@/pages/auth/service";
+import { providersTypes } from "../..";
+
+import { useGroupMemberAddMutation } from "@/pages/app/collaboration/service";
+import {
+  useGithubAuthControllerBindMutation,
+  useSigninByPasswordMutation,
+} from "@/pages/auth/service";
+import useGlobalStore from "@/pages/globalStore";
 
 type FormData = {
   account: string;
@@ -22,17 +29,24 @@ type FormData = {
 };
 
 export default function LoginByPasswordPanel({
-  switchLoginType,
+  setCurrentProvider,
   showSignupBtn,
   showPhoneSigninBtn,
+  showEmailSigninBtn,
+  isDarkMode,
 }: {
-  switchLoginType: () => void;
+  setCurrentProvider: (provider: providersTypes) => void;
   showSignupBtn: boolean;
   showPhoneSigninBtn: boolean;
+  showEmailSigninBtn: boolean;
+  isDarkMode: boolean;
 }) {
   const signinByPasswordMutation = useSigninByPasswordMutation();
+  const githubAuthControllerBindMutation = useGithubAuthControllerBindMutation();
   const navigate = useNavigate();
   const [isShowPassword, setIsShowPassword] = useState(false);
+  const joinGroupMutation = useGroupMemberAddMutation();
+  const { showSuccess } = useGlobalStore();
 
   const {
     register,
@@ -47,14 +61,32 @@ export default function LoginByPasswordPanel({
     });
 
     if (res?.data) {
-      navigate(Routes.dashboard, { replace: true });
+      const githubToken = sessionStorage.getItem("githubToken");
+      sessionStorage.removeItem("githubToken");
+      if (githubToken) {
+        githubAuthControllerBindMutation.mutateAsync({
+          token: githubToken,
+        });
+      }
+      const sessionData = sessionStorage.getItem("collaborationCode");
+      const collaborationCode = JSON.parse(sessionData || "{}");
+      sessionStorage.removeItem("collaborationCode");
+      if (sessionData) {
+        const res = await joinGroupMutation.mutateAsync({ code: collaborationCode.code });
+        if (!res.error) {
+          showSuccess(t("Collaborate.JoinSuccess"));
+        }
+        navigate(`/app/${collaborationCode.appid}/function`);
+      } else {
+        navigate(Routes.dashboard, { replace: true });
+      }
     }
   };
 
   return (
     <div>
-      <FormControl isInvalid={!!errors?.account} className="mb-10 flex items-center">
-        <FormLabel className="w-20" htmlFor="account">
+      <FormControl isInvalid={!!errors?.account} className="mb-6">
+        <FormLabel className={isDarkMode ? "" : "text-grayModern-700"} htmlFor="account">
           {t("AuthPanel.Account")}
         </FormLabel>
         <Input
@@ -62,12 +94,14 @@ export default function LoginByPasswordPanel({
           type="text"
           id="account"
           placeholder={t("AuthPanel.AccountPlaceholder") || ""}
-          bg={"#F8FAFB"}
-          border={"1px solid #D5D6E1"}
+          bg={isDarkMode ? "#363C42" : "#F8FAFB"}
+          border={isDarkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+          height="48px"
+          rounded="4px"
         />
       </FormControl>
-      <FormControl isInvalid={!!errors.password} className="mb-10 flex items-center">
-        <FormLabel className="w-20" htmlFor="phone">
+      <FormControl isInvalid={!!errors.password} className="mb-12">
+        <FormLabel className={isDarkMode ? "" : "text-grayModern-700"} htmlFor="phone">
           {t("AuthPanel.Password")}
         </FormLabel>
         <InputGroup>
@@ -78,47 +112,90 @@ export default function LoginByPasswordPanel({
             })}
             id="password"
             placeholder={t("AuthPanel.PasswordPlaceholder") || ""}
-            bg={"#F8FAFB"}
-            border={"1px solid #D5D6E1"}
+            bg={isDarkMode ? "#363C42" : "#F8FAFB"}
+            border={isDarkMode ? "1px solid #24282C" : "1px solid #D5D6E1"}
+            height="48px"
+            rounded="4px"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleSubmit(onSubmit)();
+              }
+            }}
           />
-          <InputRightElement width="2rem">
+          <InputRightElement height="100%">
             {isShowPassword ? (
-              <ViewOffIcon className="cursor-pointer" onClick={() => setIsShowPassword(false)} />
+              <OutlineViewOffIcon
+                className="cursor-pointer !text-primary-500"
+                onClick={() => setIsShowPassword(false)}
+              />
             ) : (
-              <ViewIcon className="cursor-pointer" onClick={() => setIsShowPassword(true)} />
+              <OutlineViewOnIcon
+                className="cursor-pointer !text-primary-500"
+                onClick={() => setIsShowPassword(true)}
+              />
             )}
           </InputRightElement>
         </InputGroup>
       </FormControl>
-      <div className="mt-10">
+      <div>
         <Button
           type="submit"
-          className="w-full pb-5 pt-5"
+          className="!h-[42px] w-full !bg-primary-500 hover:!bg-primary-600"
           isLoading={signinByPasswordMutation.isLoading}
           onClick={handleSubmit(onSubmit)}
         >
           {t("AuthPanel.Login")}
         </Button>
-        <div className="mt-2 flex justify-between">
-          <div>
-            <Button
-              className="mr-1"
-              size="xs"
-              variant={"text"}
-              onClick={() => navigate("/reset-password", { replace: true })}
-            >
-              {t("AuthPanel.ForgotPassword")}
-            </Button>
-          </div>
-          <div>
+        <div className="mt-5 flex justify-between">
+          {showPhoneSigninBtn || showEmailSigninBtn ? (
+            <div>
+              <Button
+                className="!pl-2 !pr-0 text-lg"
+                variant={"text"}
+                onClick={() => navigate("/reset-password", { replace: true })}
+              >
+                {t("AuthPanel.ForgotPassword")}
+              </Button>
+            </div>
+          ) : (
+            <div></div>
+          )}
+          <div className="flex">
             {showPhoneSigninBtn && (
-              <Button className="mr-1" size="xs" variant={"text"} onClick={switchLoginType}>
+              <Button
+                className="!px-2 text-lg"
+                variant={"text"}
+                onClick={() => {
+                  setCurrentProvider(PROVIDER_NAME.PHONE);
+                }}
+              >
                 {t("AuthPanel.PhoneLogin")}
               </Button>
             )}
+            {showSignupBtn && showPhoneSigninBtn && (
+              <div className="mx-3 flex items-center">
+                <span className="h-3 w-[1px] bg-primary-500 text-primary-500"></span>
+              </div>
+            )}
+            {showEmailSigninBtn && (
+              <Button
+                className="!px-2 text-lg"
+                variant={"text"}
+                onClick={() => {
+                  setCurrentProvider(PROVIDER_NAME.EMAIL);
+                }}
+              >
+                {t("AuthPanel.EmailLogin")}
+              </Button>
+            )}
+            {showSignupBtn && showEmailSigninBtn && (
+              <div className="mx-3 flex items-center">
+                <span className="h-3 w-[1px] bg-primary-500 text-primary-500"></span>
+              </div>
+            )}
             {showSignupBtn && (
               <Button
-                size="xs"
+                className="!px-2 text-lg"
                 variant={"text"}
                 onClick={() => navigate("/signup", { replace: true })}
               >

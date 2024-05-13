@@ -1,11 +1,14 @@
 import React from "react";
 import { useForm } from "react-hook-form";
+import { InfoOutlineIcon } from "@chakra-ui/icons";
 import {
   Button,
   FormControl,
   FormErrorMessage,
   FormLabel,
   Input,
+  InputAddon,
+  InputGroup,
   Modal,
   ModalBody,
   ModalCloseButton,
@@ -14,9 +17,11 @@ import {
   ModalHeader,
   ModalOverlay,
   Select,
+  useColorMode,
   useDisclosure,
   VStack,
 } from "@chakra-ui/react";
+import clsx from "clsx";
 import { t } from "i18next";
 
 import { BUCKET_POLICY_TYPE } from "@/constants";
@@ -34,6 +39,8 @@ function CreateBucketModal(props: { storage?: TBucket; children: React.ReactElem
   const { storage, children } = props;
   const bucketCreateMutation = useBucketCreateMutation();
   const bucketUpdateMutation = useBucketUpdateMutation();
+
+  const darkMode = useColorMode().colorMode === "dark";
 
   const defaultValues = {
     name: storage?.name,
@@ -53,7 +60,7 @@ function CreateBucketModal(props: { storage?: TBucket; children: React.ReactElem
     defaultValues,
   });
 
-  const { showSuccess } = useGlobalStore();
+  const { showSuccess, currentApp } = useGlobalStore();
 
   const isEdit = !!storage;
 
@@ -63,7 +70,7 @@ function CreateBucketModal(props: { storage?: TBucket; children: React.ReactElem
       res = await bucketUpdateMutation.mutateAsync(values);
       if (!res.error) {
         store.setCurrentStorage(res.data);
-        showSuccess("update success.");
+        showSuccess(t("UpdateSuccess"));
         onClose();
       }
     } else {
@@ -73,7 +80,7 @@ function CreateBucketModal(props: { storage?: TBucket; children: React.ReactElem
       });
       if (!res.error) {
         store.setCurrentStorage(res.data);
-        showSuccess("create success.");
+        showSuccess(t("CreateSuccess"));
         onClose();
       }
     }
@@ -102,18 +109,30 @@ function CreateBucketModal(props: { storage?: TBucket; children: React.ReactElem
             <VStack spacing={6} align="flex-start">
               <FormControl isInvalid={!!errors?.name}>
                 <FormLabel htmlFor="name"> {t("StoragePanel.BucketName")}</FormLabel>
-                <Input
-                  {...register("name", {
-                    required: true,
-                    pattern: {
-                      value: /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/,
-                      message: t("StoragePanel.BucketNameRule"),
-                    },
-                  })}
-                  placeholder={String(t("StoragePanel.BucketNamePlaceholder"))}
-                  variant="filled"
-                  disabled={isEdit}
-                />
+                <InputGroup>
+                  {!isEdit && (
+                    <InputAddon className="!mr-0 !rounded-r-none !pr-0">
+                      {currentApp.appid + "-"}
+                    </InputAddon>
+                  )}
+                  <Input
+                    {...register("name", {
+                      required: t("StoragePanel.BucketNameisRequired").toString(),
+                      pattern: {
+                        value: /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/,
+                        message: t("StoragePanel.BucketNameRule"),
+                      },
+                    })}
+                    variant="filled"
+                    placeholder={String(t("StoragePanel.BucketNamePlaceholder"))}
+                    disabled={isEdit}
+                    className={clsx(
+                      "!rounded-l-none !border-none",
+                      darkMode ? "!bg-[#FFFFFF0A]" : "!bg-lafWhite-600",
+                      isEdit ? "" : "!ml-0 !pl-0",
+                    )}
+                  />
+                </InputGroup>
                 <FormErrorMessage>{errors.name && errors.name.message}</FormErrorMessage>
               </FormControl>
 
@@ -127,6 +146,11 @@ function CreateBucketModal(props: { storage?: TBucket; children: React.ReactElem
                   </option>
                 </Select>
               </FormControl>
+
+              <span className="flex items-center text-grayModern-600">
+                <InfoOutlineIcon className="mx-1" />
+                {t("StoragePanel.BucketTips")}
+              </span>
             </VStack>
           </ModalBody>
 

@@ -1,88 +1,124 @@
 import { useEffect, useState } from "react";
-import { AiFillGithub } from "react-icons/ai";
-import { Button, useColorMode } from "@chakra-ui/react";
+import { Button, Center, Spinner, useColorMode } from "@chakra-ui/react";
 import clsx from "clsx";
 import { t } from "i18next";
 
-import { COLOR_MODE } from "@/constants";
+import { GithubIcon } from "@/components/CommonIcon";
+import { Logo, LogoText } from "@/components/LogoIcon";
+import { COLOR_MODE, PROVIDER_NAME } from "@/constants";
 
+import LoginByEmailPanel from "./mods/LoginByEmailPanel";
 import LoginByPasswordPanel from "./mods/LoginByPasswordPanel";
 import LoginByPhonePanel from "./mods/LoginByPhonePanel";
 
-import { useGetProvidersQuery } from "@/pages/auth/service";
 import useAuthStore from "@/pages/auth/store";
+import useGlobalStore from "@/pages/globalStore";
 
-type providersTypes = "user-password" | "phone" | "github" | "wechat";
+export type providersTypes =
+  | PROVIDER_NAME.EMAIL
+  | PROVIDER_NAME.GITHUB
+  | PROVIDER_NAME.PHONE
+  | PROVIDER_NAME.PASSWORD;
 
 export default function SignIn() {
   const { colorMode } = useColorMode();
   const darkMode = colorMode === COLOR_MODE.dark;
-  const { providers, setProviders } = useAuthStore();
-  useGetProvidersQuery((data: any) => {
-    setProviders(data?.data || []);
-  });
-  const [phoneProvider, setPhoneProvider] = useState<any>(null);
-  const [passwordProvider, setPasswordProvider] = useState<any>(null);
-  const [githubProvider, setGithubProvider] = useState<any>(null);
-  const [wechatProvider, setWechatProvider] = useState<any>(null);
+  const { githubProvider, passwordProvider, phoneProvider, emailProvider, defaultProvider } =
+    useAuthStore();
   const [currentProvider, setCurrentProvider] = useState<providersTypes>();
-  useEffect(() => {
-    if (providers.length) {
-      const phoneProvider = providers.find((provider: any) => provider.name === "phone");
-      const passwordProvider = providers.find((provider: any) => provider.name === "user-password");
-      const githubProvider = providers.find((provider: any) => provider.name === "github");
 
-      setPhoneProvider(phoneProvider);
-      setPasswordProvider(passwordProvider);
-      setGithubProvider(githubProvider);
-      setWechatProvider(wechatProvider);
-      providers.forEach((provider: any) => {
-        if (provider.default) {
-          setCurrentProvider(provider.name);
-        }
-      });
+  const isBindGithub = !!sessionStorage.getItem("githubToken");
+  const { showInfo } = useGlobalStore();
+
+  useEffect(() => {
+    setCurrentProvider(defaultProvider.name);
+  }, [defaultProvider]);
+
+  useEffect(() => {
+    if (isBindGithub) {
+      showInfo(t("AuthPanel.PleaseBindUser"), 5000, true);
     }
-  }, [providers, wechatProvider]);
+  }, [isBindGithub, showInfo]);
 
   return (
     <div
       className={clsx(
-        "labtop:w-[560px] absolute left-1/2 top-1/2 -translate-y-1/2 rounded-[10px] p-[65px] pb-[100px] phone:left-0 phone:max-h-[400px] phone:w-screen phone:p-[45px] pc:w-[560px]",
+        "absolute right-[125px] top-1/2 w-[560px] -translate-y-1/2 rounded-3xl px-16 pb-16 pt-[78px]",
         {
           "bg-lafDark-100": darkMode,
-          "bg-white": !darkMode,
+          "bg-[#FCFCFD]": !darkMode,
         },
       )}
     >
-      <div className="mb-[45px]">
-        <img src="/logo_light.png" alt="logo" width={80} className="mr-4" />
-      </div>
+      {isBindGithub ? (
+        <div className="mb-10 text-[22px] font-semibold text-grayModern-700">
+          {t("AuthPanel.BindGitHub")}
+        </div>
+      ) : (
+        <div className="mb-9 flex items-center space-x-4">
+          <Logo size="43px" outerColor="#33BABB" innerColor="white" />
+          <LogoText size="51px" color={darkMode ? "#33BABB" : "#363C42"} />
+        </div>
+      )}
 
-      {currentProvider === "phone" ? (
-        <LoginByPhonePanel
-          showPasswordSigninBtn={!!passwordProvider}
-          switchLoginType={() => setCurrentProvider("user-password")}
-        />
-      ) : currentProvider === "user-password" ? (
-        <LoginByPasswordPanel
-          showSignupBtn={!!passwordProvider?.register}
-          showPhoneSigninBtn={!!phoneProvider}
-          switchLoginType={() => setCurrentProvider("phone")}
-        />
-      ) : null}
+      {currentProvider ? (
+        <div>
+          {currentProvider === PROVIDER_NAME.PHONE ? (
+            <LoginByPhonePanel
+              showPasswordSigninBtn={!!passwordProvider}
+              switchLoginType={() => setCurrentProvider(PROVIDER_NAME.PASSWORD)}
+              isDarkMode={darkMode}
+            />
+          ) : currentProvider === PROVIDER_NAME.EMAIL ? (
+            <LoginByEmailPanel
+              showPasswordSigninBtn={!!passwordProvider}
+              switchLoginType={() => setCurrentProvider(PROVIDER_NAME.PASSWORD)}
+              isDarkMode={darkMode}
+            />
+          ) : currentProvider === PROVIDER_NAME.PASSWORD ? (
+            <LoginByPasswordPanel
+              showSignupBtn={!!passwordProvider?.register}
+              showPhoneSigninBtn={!!phoneProvider}
+              showEmailSigninBtn={!!emailProvider}
+              setCurrentProvider={setCurrentProvider}
+              isDarkMode={darkMode}
+            />
+          ) : null}
 
-      {(githubProvider || wechatProvider) && (
-        <div className="mt-20">
-          <div className="relative mb-5 w-full text-center before:absolute before:top-1/2 before:block before:h-[1px] before:w-full before:bg-slate-300 before:content-['']">
-            <span className="relative z-10 bg-white pl-5 pr-5">or</span>
-          </div>
-          {githubProvider && (
-            <Button type="submit" className="w-full pb-5 pt-5" colorScheme="white" variant="plain">
-              <AiFillGithub className="mr-4" />
-              {t("AuthPanel.LoginWithGithub")}
-            </Button>
+          {!isBindGithub && githubProvider && (
+            <div className="mt-2">
+              <div className="relative mb-5 w-full text-center before:absolute before:top-1/2 before:block before:h-[1px] before:w-full before:bg-[#E9EEF5] before:content-['']">
+                <span
+                  className={clsx(
+                    "relative z-10 pl-5 pr-5 text-frostyNightfall-600",
+                    !darkMode ? "bg-white" : "bg-lafDark-100",
+                  )}
+                >
+                  or
+                </span>
+              </div>
+              <Button
+                type="submit"
+                className={clsx("w-full pb-5 pt-5", !darkMode && "text-[#495867]")}
+                colorScheme="white"
+                variant="outline"
+                border="1.5px solid #DDE4EF"
+                onClick={() => {
+                  window.location.href = `v1/auth/github/jump_login?redirectUri=${encodeURIComponent(
+                    window.location.origin,
+                  )}/bind/github`;
+                }}
+              >
+                <GithubIcon className="mr-4" fontSize="18" />
+                {t("AuthPanel.LoginWithGithub")}
+              </Button>
+            </div>
           )}
         </div>
+      ) : (
+        <Center className="h-[310px]">
+          <Spinner />
+        </Center>
       )}
     </div>
   );

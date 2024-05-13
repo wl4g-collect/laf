@@ -15,6 +15,11 @@ import { AuthenticationController } from './authentication.controller'
 import { AuthenticationService } from './authentication.service'
 import { SmsService } from './phone/sms.service'
 import { AccountService } from 'src/account/account.service'
+import { EmailService } from './email/email.service'
+import { EmailController } from './email/email.controller'
+import { MailerService } from './email/mailer.service'
+import { GithubAuthController } from './github/github.controller'
+import { GithubService } from './github/github.service'
 
 @Global()
 @Module({
@@ -34,14 +39,19 @@ import { AccountService } from 'src/account/account.service'
     UserPasswordService,
     PhoneService,
     SmsService,
+    EmailService,
     AuthenticationService,
     AccountService,
+    MailerService,
+    GithubService,
   ],
-  exports: [SmsService],
+  exports: [SmsService, EmailService],
   controllers: [
     UserPasswordController,
     PhoneController,
     AuthenticationController,
+    EmailController,
+    GithubAuthController,
   ],
 })
 export class AuthenticationModule {}

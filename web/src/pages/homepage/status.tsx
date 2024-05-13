@@ -1,14 +1,17 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 
+import useSiteSettingStore from "../siteSetting";
+
 import styles from "./status.module.scss";
 
 export default function Status() {
   const { t } = useTranslation();
+  const { siteSettings } = useSiteSettingStore();
   return (
     <a
       target="_blank"
-      href="https://hnpsxzqqtavv.cloud.sealos.cn/status/laf"
+      href={siteSettings.laf_status_url?.value}
       className={"mr-6 flex items-center whitespace-nowrap "}
       rel="noreferrer"
     >

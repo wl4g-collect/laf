@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
-import { AddIcon, CopyIcon } from "@chakra-ui/icons";
-import { Button, Center, Spinner, Text, useColorMode } from "@chakra-ui/react";
+import { AddIcon } from "@chakra-ui/icons";
+import { Button, Center, Input, Spinner, Text, useColorMode } from "@chakra-ui/react";
 import clsx from "clsx";
 import { t } from "i18next";
 
+import { OutlineCopyIcon } from "@/components/CommonIcon";
 import CopyText from "@/components/CopyText";
 import JSONEditor from "@/components/Editor/JSONEditor";
 import JSONViewer from "@/components/Editor/JSONViewer";
@@ -95,10 +96,9 @@ export default function PolicyDataList() {
         >
           <Button
             disabled={store.currentPolicy === undefined}
-            colorScheme="primary"
-            className="mr-2"
-            style={{ width: "114px" }}
-            leftIcon={<AddIcon />}
+            leftIcon={<AddIcon fontSize={10} className="text-grayModern-500" />}
+            variant="textGhost"
+            size="xs"
           >
             {t("CollectionPanel.AddRules")}
           </Button>
@@ -118,6 +118,9 @@ export default function PolicyDataList() {
               ListQuery={rulesListQuery?.data?.data}
               setKey="_id"
               isActive={(item: any) => currentData?._id === item._id}
+              customStyle={{
+                "border-lafWhite-600": colorMode === COLOR_MODE.light,
+              }}
               onClick={(data: any) => {
                 setCurrentData(data);
                 setRecord(JSON.stringify(data.value, null, 2));
@@ -128,7 +131,7 @@ export default function PolicyDataList() {
                 return (
                   <>
                     <div
-                      className={clsx("mb-4 border-b-2 p-2", {
+                      className={clsx("mb-4 border-b-2 pb-2 pl-2", {
                         "border-lafWhite-600": !darkMode,
                       })}
                     >
@@ -142,21 +145,21 @@ export default function PolicyDataList() {
               }}
               toolComponent={(item: any) => {
                 return (
-                  <IconWrap
-                    showBg
-                    tooltip={t("Copy").toString()}
-                    size={32}
-                    className="group/icon ml-2 hover:bg-rose-100"
+                  <CopyText
+                    hideToolTip
+                    text={JSON.stringify(item.value, null, 2)}
+                    tip={String(t("Copied"))}
+                    className="ml-2 hover:bg-gray-200"
                   >
-                    <CopyText
-                      hideToolTip
-                      text={JSON.stringify(item.value, null, 2)}
-                      tip={String(t("Copied"))}
-                      className="group-hover/icon:text-error-500"
+                    <IconWrap
+                      showBg
+                      tooltip={t("Copy").toString()}
+                      size={32}
+                      className="group/icon"
                     >
-                      <CopyIcon />
-                    </CopyText>
-                  </IconWrap>
+                      <OutlineCopyIcon size="14" color={darkMode ? "#ffffff" : "#24282C"} />
+                    </IconWrap>
+                  </CopyText>
                 );
               }}
             />
@@ -167,8 +170,13 @@ export default function PolicyDataList() {
               onSave={handleData}
             >
               <Text fontSize="md" className="mb-2 font-semibold leading-loose">
-                {t("CollectionPanel.SelectCollection")}: {currentData?.collectionName}
+                {t("CollectionPanel.SelectCollection")}:
               </Text>
+              <Input
+                isDisabled
+                value={currentData?.collectionName}
+                className={darkMode ? "bg-lafDark-200" : "bg-lafWhite-400"}
+              ></Input>
               <Text fontSize="md" className="mb-2 mt-4 font-semibold leading-loose">
                 {t("CollectionPanel.RulesContent")}
               </Text>
@@ -192,17 +200,6 @@ export default function PolicyDataList() {
           <EmptyBox>
             <div>
               <span>{t("CollectionPanel.EmptyRuleTip")}</span>
-              <AddRulesModal
-                onSuccessSubmit={(data) => {
-                  setCurrentData(data);
-                  setRecord(JSON.stringify(data.value, null, 2));
-                  rulesListQuery.refetch();
-                }}
-              >
-                <span className="ml-2 cursor-pointer text-primary-600 hover:border-b-2 hover:border-primary-600">
-                  {t("CreateNow")}
-                </span>
-              </AddRulesModal>
             </div>
           </EmptyBox>
         )}

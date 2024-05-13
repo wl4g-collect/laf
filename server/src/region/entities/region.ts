@@ -1,25 +1,53 @@
 import { ApiProperty } from '@nestjs/swagger'
 import { ObjectId } from 'mongodb'
 
+export enum ApplicationNamespaceMode {
+  Fixed = 'fixed',
+  AppId = 'appid',
+}
+
+export type RegionNamespaceConf = {
+  mode: ApplicationNamespaceMode
+  prefix: string
+  fixed?: string
+}
+
 export type RegionClusterConf = {
   driver: string
   kubeconfig: string
   npmInstallFlags: string
+  runtimeAffinity: any
+}
+
+export type RegionResourceBundleConf = {
+  cpuRequestLimitRatio: number
+  memoryRequestLimitRatio: number
 }
 
 export type RegionDatabaseConf = {
   driver: string
   connectionUri: string
   controlConnectionUri: string
+  dedicatedDatabase: {
+    enabled: boolean
+  }
+}
+
+export type TLSConf = {
+  enabled: boolean
+  issuerRef: {
+    name: string
+    kind: 'ClusterIssuer' | 'Issuer'
+  }
+  wildcardCertificateSecretName?: string
 }
 
 export type RegionGatewayConf = {
-  driver: string
+  driver: 'apisix' | 'nginx'
   runtimeDomain: string
   websiteDomain: string
   port: number
-  apiUrl: string
-  apiKey: string
+  tls: TLSConf
 }
 
 export type RegionStorageConf = {
@@ -32,6 +60,20 @@ export type RegionStorageConf = {
   controlEndpoint: string
 }
 
+export type LogServerConf = {
+  apiUrl: string
+  secret: string
+  databaseUrl: string
+}
+
+export type PrometheusConf = {
+  apiUrl: string
+}
+
+export type DeployManifest = {
+  [key: string]: string
+}
+
 export class Region {
   @ApiProperty({ type: String })
   _id?: ObjectId
@@ -42,13 +84,16 @@ export class Region {
   @ApiProperty()
   displayName: string
 
+  namespaceConf: RegionNamespaceConf
   clusterConf: RegionClusterConf
+  bundleConf: RegionResourceBundleConf
   databaseConf: RegionDatabaseConf
   gatewayConf: RegionGatewayConf
   storageConf: RegionStorageConf
+  logServerConf: LogServerConf
+  prometheusConf: PrometheusConf
 
-  @ApiProperty()
-  tls: boolean
+  deployManifest: DeployManifest
 
   @ApiProperty()
   state: 'Active' | 'Inactive'

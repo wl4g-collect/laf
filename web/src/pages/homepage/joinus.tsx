@@ -1,12 +1,15 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
 
+import useSiteSettingStore from "../siteSetting";
+
 import Circle from "./circle";
 
 type Props = {};
 
 const JoinUs = (props: Props) => {
   const { t } = useTranslation();
+  const { siteSettings } = useSiteSettingStore();
   return (
     <div className="mt-32">
       <div className="relative mb-[120px] hidden h-auto w-full rounded-3xl  bg-[url('/homepage/joinbg.svg')] bg-cover bg-repeat lg:flex lg:flex-row">
@@ -16,24 +19,20 @@ const JoinUs = (props: Props) => {
           <p className="mb-6 font-thin text-white">{t("HomePage.Join.content")}</p>
 
           <div className="flex justify-start gap-4">
-            <a
-              href="https://discord.com/channels/1061659231599738901/1098516786170839050"
-              target="_blank"
-              rel="noreferrer"
-            >
+            <a href={siteSettings.laf_discord_url?.value} target="_blank" rel="noreferrer">
               <div className="flex h-12 w-36 flex-row items-center	 justify-center gap-2 rounded-md border border-blue-200 border-opacity-30 bg-gradient-to-r from-[#394DFF1A] to-[#66E3FF33]">
                 <img src="/homepage/discord.svg" alt="discord" />
                 <p className="text-white">Discord</p>
               </div>
             </a>
-            <a href="https://w4mci7-images.oss.laf.run/wechat.png" target="_blank" rel="noreferrer">
+            <a href={siteSettings.laf_wechat_url?.value} target="_blank" rel="noreferrer">
               <div className="flex h-12 w-36 flex-row items-center	 justify-center gap-2 rounded-md border border-green-200 border-opacity-30 bg-gradient-to-r from-[#2CE25E1A] to-[#1DFFD61A]">
                 <img src="/homepage/wechat_02.svg" alt="wechat" />
                 <p className="text-white">{t("HomePage.Join.WeChat")}</p>
               </div>
             </a>
-            <a href="https://forum.laf.run/" target="_blank" rel="noreferrer">
-              <div className="flex h-12 w-36 flex-row items-center	 justify-center gap-2 rounded-md border border-blue-300 border-opacity-30 bg-gradient-to-r from-[#0B9DFF1A] to-[#4FC67E1A]">
+            <a href={siteSettings.laf_forum_url?.value} target="_blank" rel="noreferrer">
+              <div className="flex h-12 w-36 flex-row items-center justify-center gap-2 rounded-md border border-blue-300 border-opacity-30 bg-gradient-to-r from-[#0B9DFF1A] to-[#4FC67E1A]">
                 <img src="/homepage/forum.svg" alt="forum" />
                 <p className="text-white">{t("HomePage.Join.forum")}</p>
               </div>
@@ -82,24 +81,17 @@ const JoinUs = (props: Props) => {
         </div>
       </div>
       <div className="relative mx-[16px] flex h-[650px] flex-col items-center rounded-3xl bg-[url('/homepage/bg.png')] bg-cover bg-repeat lg:hidden">
-        <div className="] mb-4 mt-12 text-center text-4xl text-white">
-          {t("HomePage.Join.title")}
-        </div>
+        <div className="mb-4 mt-12 text-center text-4xl text-white">{t("HomePage.Join.title")}</div>
         <div className="mb-4 text-4xl text-white">{t("HomePage.Join.subtitle")}</div>
         <p className="mx-4 mb-8 text-center font-thin text-white">{t("HomePage.Join.content")}</p>
         <div className="flex justify-start gap-4">
-          <a href="https://w4mci7-images.oss.laf.run/wechat.png" target="_blank" rel="noreferrer">
+          <a href={siteSettings.laf_wechat_url?.value} target="_blank" rel="noreferrer">
             <img className="w-6" src="/homepage/wechat_01.svg" alt="wechat" />
           </a>
-
-          <a href="https://forum.laf.run/">
+          <a href={siteSettings.laf_forum_url?.value}>
             <img className="w-6" src="/homepage/forum1.svg" alt="forum1" />
           </a>
-          <a
-            href="https://discord.com/channels/1061659231599738901/1098516786170839050"
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a href={siteSettings.laf_discord_url?.value} target="_blank" rel="noreferrer">
             <img className="w-6" src="/homepage/discord_2.svg" alt="discord" />
           </a>
         </div>

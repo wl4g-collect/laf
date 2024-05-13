@@ -1,6 +1,8 @@
 import { JwtService } from '@nestjs/jwt'
 import { Injectable, Logger } from '@nestjs/common'
 import {
+  EMAIL_AUTH_PROVIDER_NAME,
+  GITHUB_AUTH_PROVIDER_NAME,
   PASSWORD_AUTH_PROVIDER_NAME,
   PHONE_AUTH_PROVIDER_NAME,
 } from 'src/constants'
@@ -39,6 +41,14 @@ export class AuthenticationService {
 
   async getPasswdProvider() {
     return await this.getProvider(PASSWORD_AUTH_PROVIDER_NAME)
+  }
+
+  async getGithubProvider() {
+    return await this.getProvider(GITHUB_AUTH_PROVIDER_NAME)
+  }
+
+  async getEmailProvider() {
+    return await this.getProvider(EMAIL_AUTH_PROVIDER_NAME)
   }
 
   // Get auth provider by name

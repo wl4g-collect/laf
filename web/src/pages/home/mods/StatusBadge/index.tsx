@@ -23,25 +23,37 @@ export default function StatusBadge(props: {
   className?: string;
 }) {
   const { statusConditions = APP_PHASE_STATUS.Started, state, className } = props;
+
+  const getStatus = (statusConditions: string, state: string) => {
+    if (
+      statusConditions === APP_PHASE_STATUS.Started ||
+      statusConditions === APP_PHASE_STATUS.Stopped
+    ) {
+      return state;
+    }
+    return statusConditions;
+  };
+
   return (
-    <div className={clsx("flex", className)}>
+    <>
       <div
         className={clsx(
           styles.badgeStyle,
           styles[colorScheme[statusConditions]],
-          "px-2 py-1 lg:px-3",
+          "flex px-2 py-1 font-medium",
+          className,
         )}
       >
-        <span>{statusConditions}</span>
+        <span>{getStatus(statusConditions, state || "")}</span>
+        {statusConditions === APP_PHASE_STATUS.Started ||
+        statusConditions === APP_PHASE_STATUS.Stopped ? (
+          ""
+        ) : (
+          <div className="flex items-center pl-1 text-grayModern-400">
+            <Spinner size="xs" />
+          </div>
+        )}
       </div>
-      {statusConditions === APP_PHASE_STATUS.Started ||
-      (state !== APP_PHASE_STATUS.Restarting && statusConditions === APP_PHASE_STATUS.Stopped) ? (
-        ""
-      ) : (
-        <div className="flex items-center pr-2">
-          <Spinner size="xs" />
-        </div>
-      )}
-    </div>
+    </>
   );
 }

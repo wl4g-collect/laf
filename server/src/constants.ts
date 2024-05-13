@@ -3,6 +3,10 @@ dotenv.config({ path: '.env.local' })
 dotenv.config()
 
 export class ServerConfig {
+  static get DEFAULT_LANGUAGE() {
+    return process.env.DEFAULT_LANGUAGE || 'en'
+  }
+
   static get DATABASE_URL() {
     if (!process.env.DATABASE_URL) {
       throw new Error('DATABASE_URL is not defined')
@@ -10,11 +14,19 @@ export class ServerConfig {
     return process.env.DATABASE_URL
   }
 
-  static get METERING_DATABASE_URL() {
-    if (!process.env.METERING_DATABASE_URL) {
-      throw new Error('METERING_DATABASE_URL is not defined')
+  static get TRAFFIC_DATABASE_URL() {
+    if (!process.env.TRAFFIC_DATABASE_URL) {
+      return
     }
-    return process.env.METERING_DATABASE_URL
+    return process.env.TRAFFIC_DATABASE_URL
+  }
+
+  static get NOTIFICATION_CENTER_URL() {
+    return process.env.NOTIFICATION_CENTER_URL
+  }
+
+  static get NOTIFICATION_CENTER_TOKEN() {
+    return process.env.NOTIFICATION_CENTER_TOKEN || ''
   }
 
   static get JWT_SECRET() {
@@ -26,10 +38,6 @@ export class ServerConfig {
 
   static get JWT_EXPIRES_IN() {
     return process.env.JWT_EXPIRES_IN || '7d'
-  }
-
-  static get SYSTEM_NAMESPACE() {
-    return process.env.SYSTEM_NAMESPACE || 'laf-system'
   }
 
   /* switcher of task controllers */
@@ -46,12 +54,16 @@ export class ServerConfig {
     return process.env.DISABLED_GATEWAY_TASK === 'true'
   }
 
-  static get DISABLED_SUBSCRIPTION_TASK() {
-    return process.env.DISABLED_GATEWAY_TASK === 'true'
+  static get DISABLED_TRIGGER_TASK() {
+    return process.env.DISABLED_TRIGGER_TASK === 'true'
   }
 
   static get DISABLED_STORAGE_TASK() {
     return process.env.DISABLED_STORAGE_TASK === 'true'
+  }
+
+  static get DISABLED_STORAGE_USER_TASK() {
+    return process.env.DISABLED_STORAGE_USER_TASK === 'true'
   }
 
   static get DISABLED_BILLING_CREATION_TASK() {
@@ -62,8 +74,38 @@ export class ServerConfig {
     return process.env.DISABLED_BILLING_PAYMENT_TASK === 'true'
   }
 
+  static get DISABLED_DATABASE_USAGE_CAPTURE_TASK() {
+    return process.env.DISABLED_DATABASE_USAGE_CAPTURE_TASK === 'true'
+  }
+
+  static get DISABLED_DATABASE_USAGE_LIMIT_TASK() {
+    return process.env.DISABLED_DATABASE_USAGE_LIMIT_TASK === 'true'
+  }
+
+  static get DISABLED_STORAGE_USAGE_CAPTURE_TASK() {
+    return process.env.DISABLED_STORAGE_USAGE_CAPTURE_TASK === 'true'
+  }
+
+  static get DISABLED_STORAGE_USAGE_LIMIT_TASK() {
+    return process.env.DISABLED_STORAGE_USAGE_LIMIT_TASK === 'true'
+  }
+
+  static get DISABLE_NOTIFICATION_TASK() {
+    if (!process.env.DISABLE_NOTIFICATION_TASK) {
+      return true
+    }
+    return process.env.DISABLE_NOTIFICATION_TASK === 'true'
+  }
+
   static get APPID_LENGTH(): number {
     return parseInt(process.env.APPID_LENGTH || '6')
+  }
+
+  static get RUNTIME_CUSTOM_DEPENDENCY_BASE_PATH() {
+    return (
+      process.env.RUNTIME_CUSTOM_DEPENDENCY_BASE_PATH ||
+      '/tmp/custom_dependency'
+    )
   }
 
   static get DEFAULT_RUNTIME_IMAGE() {
@@ -91,37 +133,35 @@ export class ServerConfig {
     return process.env.API_SERVER_URL || 'http://localhost:3000'
   }
 
-  static get CertManagerIssuerName() {
-    return process.env.CERT_MANAGER_ISSUER_NAME || 'laf-issuer'
+  /** default region conf */
+  static get DEFAULT_REGION_NAMESPACE() {
+    return process.env.DEFAULT_REGION_NAMESPACE
   }
 
-  /** default region conf */
   static get DEFAULT_REGION_DATABASE_URL() {
     return process.env.DEFAULT_REGION_DATABASE_URL
   }
 
   static get DEFAULT_REGION_RUNTIME_DOMAIN() {
-    return process.env.DEFAULT_REGION_RUNTIME_DOMAIN || 'localhost'
+    if (!process.env.DEFAULT_REGION_RUNTIME_DOMAIN) {
+      throw new Error('DEFAULT_REGION_RUNTIME_DOMAIN is not defined')
+    }
+    return process.env.DEFAULT_REGION_RUNTIME_DOMAIN
   }
 
   static get DEFAULT_REGION_WEBSITE_DOMAIN() {
-    return process.env.DEFAULT_REGION_WEBSITE_DOMAIN || 'localhost'
+    if (!process.env.DEFAULT_REGION_WEBSITE_DOMAIN) {
+      throw new Error('DEFAULT_REGION_WEBSITE_DOMAIN is not defined')
+    }
+    return process.env.DEFAULT_REGION_WEBSITE_DOMAIN
   }
 
-  static get DEFAULT_REGION_TLS(): boolean {
-    return process.env.DEFAULT_REGION_TLS === 'true'
+  static get DEFAULT_REGION_TLS_ENABLED() {
+    return process.env.DEFAULT_REGION_TLS_ENABLED === 'true'
   }
 
-  static get DEFAULT_REGION_APISIX_PUBLIC_PORT() {
-    return parseInt(process.env.DEFAULT_REGION_APISIX_PUBLIC_PORT || '80')
-  }
-
-  static get DEFAULT_REGION_APISIX_API_URL() {
-    return process.env.DEFAULT_REGION_APISIX_API_URL
-  }
-
-  static get DEFAULT_REGION_APISIX_API_KEY() {
-    return process.env.DEFAULT_REGION_APISIX_API_KEY
+  static get DEFAULT_REGION_TLS_WILDCARD_CERTIFICATE_SECRET_NAME() {
+    return process.env.DEFAULT_REGION_TLS_WILDCARD_CERTIFICATE_SECRET_NAME
   }
 
   static get DEFAULT_REGION_MINIO_DOMAIN() {
@@ -143,6 +183,15 @@ export class ServerConfig {
   static get DEFAULT_REGION_MINIO_ROOT_SECRET_KEY() {
     return process.env.DEFAULT_REGION_MINIO_ROOT_SECRET_KEY
   }
+
+  static get DEFAULT_REGION_PROMETHEUS_URL() {
+    return process.env.DEFAULT_REGION_PROMETHEUS_URL
+  }
+
+  // HTTP interceptor
+  static get HTTP_INTERCEPTOR_URL() {
+    return process.env.HTTP_INTERCEPTOR_URL
+  }
 }
 
 export const LABEL_KEY_USER_ID = 'laf.dev/user.id'
@@ -160,8 +209,8 @@ export const HTTP_METHODS = ['HEAD', 'GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 
 export const CN_PUBLISHED_FUNCTIONS = '__functions__'
 export const CN_PUBLISHED_POLICIES = '__policies__'
-export const CN_FUNCTION_LOGS = '__function_logs__'
 export const CN_PUBLISHED_CONF = '__conf__'
+export const CN_PUBLISHED_WEBSITE_HOSTING = '__website_hosting__'
 
 export const X_LAF_TRIGGER_TOKEN_KEY = 'x-laf-trigger-token'
 export const X_LAF_DEVELOP_TOKEN_KEY = 'x-laf-develop-token'
@@ -170,7 +219,8 @@ export const APPLICATION_SECRET_KEY = 'SERVER_SECRET'
 // Cluster constants
 export const MINIO_COMMON_USER_GROUP = 'laf_owner_by_prefix_group'
 export const MINIO_COMMON_USER_POLICY = 'laf_owner_by_prefix'
-
+export const MINIO_READONLY_USER_GROUP = 'laf_owner_readonly_by_prefix_group'
+export const MINIO_READONLY_USER_POLICY = 'laf_owner_readonly_by_prefix'
 // Date & times
 export const ONE_DAY_IN_SECONDS = 60 * 60 * 24 // 1 day in seconds
 export const SEVEN_DAYS_IN_SECONDS = 60 * 60 * 24 * 7 // 7 days in seconds
@@ -188,9 +238,20 @@ export const GB = 1024 * MB
 // auth constants
 export const PHONE_AUTH_PROVIDER_NAME = 'phone'
 export const PASSWORD_AUTH_PROVIDER_NAME = 'user-password'
+export const EMAIL_AUTH_PROVIDER_NAME = 'email'
+export const GITHUB_AUTH_PROVIDER_NAME = 'github'
 
 // Sms constants
 export const ALISMS_KEY = 'alisms'
 export const LIMIT_CODE_FREQUENCY = 60 * 1000 // 60 seconds (in milliseconds)
 export const LIMIT_CODE_PER_IP_PER_DAY = 30 // 30 times
 export const CODE_VALIDITY = 10 * 60 * 1000 // 10 minutes (in milliseconds)
+
+// Github constants
+export const GITHUB_SIGNIN_TOKEN_VALIDITY = 5 * 60 * 1000
+
+// Recycle bin constants
+export const STORAGE_LIMIT = 1000 // 1000 items
+
+// HTTP interceptor
+export const HTTP_INTERCEPTOR_TIMEOUT = 3000 // 3s

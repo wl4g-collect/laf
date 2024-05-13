@@ -1,115 +1,73 @@
 import { useTranslation } from "react-i18next";
-import { CopyIcon } from "@chakra-ui/icons";
-import { HStack, Input, useColorMode } from "@chakra-ui/react";
-import clsx from "clsx";
+import { useColorMode } from "@chakra-ui/react";
 
-import CopyText from "@/components/CopyText";
 import FunctionEditor from "@/components/Editor/FunctionEditor";
+import TSEditor from "@/components/Editor/TSEditor";
 import EmptyBox from "@/components/EmptyBox";
 import Panel from "@/components/Panel";
-import { COLOR_MODE } from "@/constants";
+import { RUNTIMES_PATH } from "@/constants";
 
 import { useFunctionListQuery } from "../../service";
 import useFunctionStore from "../../store";
-import DeployButton from "../DeployButton";
 import CreateModal from "../FunctionPanel/CreateModal";
-import PromptModal from "../FunctionPanel/CreateModal/PromptModal";
 
-import FunctionDetailPopOver from "./FunctionDetailPopOver";
+import "@/components/Editor/index.css";
 
 import useFunctionCache from "@/hooks/useFunctionCache";
+import useCustomSettingStore from "@/pages/customSetting";
+import useGlobalStore from "@/pages/globalStore";
 
 function EditorPanel() {
   const store = useFunctionStore((store) => store);
-  const { currentFunction, updateFunctionCode, getFunctionUrl } = store;
+  const { currentFunction, updateFunctionCode } = store;
+  const { commonSettings } = useCustomSettingStore();
   const { colorMode } = useColorMode();
   const { t } = useTranslation();
   const functionCache = useFunctionCache();
+  const { isLSPEffective } = useGlobalStore();
 
   const functionListQuery = useFunctionListQuery();
-  const darkMode = colorMode === COLOR_MODE.dark;
   return (
-    <Panel className="flex-1 flex-grow px-0">
-      {currentFunction?.name ? (
-        <Panel.Header
-          className={clsx("!mb-0 h-[50px] px-2", {
-            "border-b-2 ": !darkMode,
-            "border-lafWhite-400": !darkMode,
-          })}
-        >
-          <HStack maxW={"55%"} spacing={2}>
-            <CopyText
-              className="whitespace-nowrap text-xl font-semibold"
-              text={currentFunction?.name}
-            >
-              <span>{currentFunction?.name}</span>
-            </CopyText>
-            <FunctionDetailPopOver />
-            {currentFunction?._id &&
-              functionCache.getCache(currentFunction?._id, currentFunction?.source?.code) !==
-                currentFunction?.source?.code && (
-                <span className="inline-block h-2 w-2 flex-none rounded-full bg-warn-700"></span>
-              )}
-            {currentFunction?.desc ? (
-              <span className="overflow-hidden text-ellipsis whitespace-nowrap font-normal text-slate-400">
-                {currentFunction?.desc}
-              </span>
-            ) : null}
-          </HStack>
-
-          <HStack spacing={1}>
-            <div className={clsx("flex items-center", !darkMode && "bg-[#F6F8F9]")}>
-              <Input w={"200px"} size="xs" readOnly value={getFunctionUrl()} />
-              <CopyText
-                text={getFunctionUrl()}
-                className="mr-3 cursor-pointer !text-grayModern-300"
-              >
-                <CopyIcon />
-              </CopyText>
-            </div>
-            <DeployButton />
-          </HStack>
-        </Panel.Header>
-      ) : null}
-
+    <Panel className="flex-1 flex-grow !rounded-tl-none !px-0">
       {!functionListQuery.isFetching && functionListQuery.data?.data?.length === 0 && (
-        <EmptyBox>
+        <EmptyBox className="h-full w-full">
           <>
             <div className="flex items-center justify-center">
+              <span className="text-[#828289]">{t("NoFunctionYet")}</span>
               <CreateModal key="create_modal_new">
-                <span className="ml-2 cursor-pointer border-b-2 border-b-transparent text-primary-600 hover:border-primary-600">
-                  {t("CreateNow")}
-                </span>
+                <u className="ml-2 cursor-pointer text-primary-600">{t("CreateNow")}</u>
               </CreateModal>
-
-              <p className="mx-2 mb-[2px]">{t("Or")}</p>
-
-              <PromptModal>
-                <span className="cursor-pointer border-b-2 border-b-transparent font-bold text-primary-600  hover:border-primary-600">
-                  {t("TryLafAI")}
-                </span>
-              </PromptModal>
             </div>
           </>
         </EmptyBox>
       )}
-
-      {currentFunction?.name && (
-        <FunctionEditor
-          colorMode={colorMode}
-          className="flex-grow"
-          style={{
-            marginLeft: -14,
-            marginRight: -14,
-          }}
-          path={currentFunction?._id || ""}
-          value={functionCache.getCache(currentFunction!._id, currentFunction!.source?.code)}
-          onChange={(value) => {
-            updateFunctionCode(currentFunction, value || "");
-            functionCache.setCache(currentFunction!._id, value || "");
-          }}
-        />
-      )}
+      <div className={functionListQuery.data?.data?.length !== 0 ? "h-full" : "hidden"}>
+        {commonSettings.useLSP && isLSPEffective ? (
+          <FunctionEditor
+            value={functionCache.getCache(currentFunction!._id, currentFunction!.source?.code)}
+            colorMode={colorMode}
+            className="h-full flex-grow"
+            path={`${RUNTIMES_PATH}/${currentFunction?.name}.ts`}
+            onChange={(code, pos) => {
+              updateFunctionCode(currentFunction, code || "");
+              functionCache.setCache(currentFunction!._id, code || "");
+              functionCache.setPositionCache(currentFunction!.name, JSON.stringify(pos));
+            }}
+            fontSize={commonSettings.fontSize}
+          />
+        ) : (
+          <TSEditor
+            value={functionCache.getCache(currentFunction!._id, currentFunction!.source?.code)}
+            path={`${RUNTIMES_PATH}/${currentFunction?.name}.ts`}
+            onChange={(value) => {
+              updateFunctionCode(currentFunction, value || "");
+              functionCache.setCache(currentFunction!._id, value || "");
+            }}
+            fontSize={commonSettings.fontSize}
+            colorMode={colorMode}
+          />
+        )}
+      </div>
     </Panel>
   );
 }

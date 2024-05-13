@@ -1,52 +1,38 @@
 import {
   V1Deployment,
   V1DeploymentSpec,
+  V1ServiceSpec,
   V2HorizontalPodAutoscaler,
   V2HorizontalPodAutoscalerSpec,
 } from '@kubernetes/client-node'
 import { Injectable, Logger } from '@nestjs/common'
-import { GetApplicationNamespaceByAppId } from '../utils/getter'
-import {
-  LABEL_KEY_APP_ID,
-  LABEL_KEY_NODE_TYPE,
-  MB,
-  NodeType,
-} from '../constants'
+import { GetApplicationNamespace } from 'src/utils/getter'
+import { LABEL_KEY_APP_ID, MB, ServerConfig } from '../constants'
 import { StorageService } from '../storage/storage.service'
 import { DatabaseService } from 'src/database/database.service'
 import { ClusterService } from 'src/region/cluster/cluster.service'
-import { SystemDatabase } from 'src/system-database'
 import { ApplicationWithRelations } from 'src/application/entities/application'
 import { ApplicationService } from 'src/application/application.service'
+import * as assert from 'assert'
+import { CloudBinBucketService } from 'src/storage/cloud-bin-bucket.service'
+import { DedicatedDatabaseService } from 'src/database/dedicated-database/dedicated-database.service'
 
 @Injectable()
 export class InstanceService {
   private readonly logger = new Logger('InstanceService')
-  private readonly db = SystemDatabase.db
 
   constructor(
     private readonly cluster: ClusterService,
     private readonly storageService: StorageService,
     private readonly databaseService: DatabaseService,
+    private readonly dedicatedDatabaseService: DedicatedDatabaseService,
     private readonly applicationService: ApplicationService,
+    private readonly cloudbin: CloudBinBucketService,
   ) {}
 
   public async create(appid: string) {
     const app = await this.applicationService.findOneUnsafe(appid)
-    const labels = { [LABEL_KEY_APP_ID]: appid }
-    const region = app.region
-
-    // Although a namespace has already been created during application creation,
-    // we still need to check it again here in order to handle situations where the cluster is rebuilt.
-    const namespace = await this.cluster.getAppNamespace(region, appid)
-    if (!namespace) {
-      this.logger.debug(`Creating namespace for application ${appid}`)
-      await this.cluster.createAppNamespace(
-        region,
-        appid,
-        app.createdBy.toString(),
-      )
-    }
+    const labels: Record<string, string> = this.getRuntimeLabel(appid)
 
     // ensure deployment created
     const res = await this.get(app.appid)
@@ -114,8 +100,8 @@ export class InstanceService {
   public async restart(appid: string) {
     const app = await this.applicationService.findOneUnsafe(appid)
     const region = app.region
-    const { deployment, hpa } = await this.get(appid)
-    if (!deployment) {
+    const { deployment, hpa, service } = await this.get(appid)
+    if (!deployment || !service) {
       await this.create(appid)
       return
     }
@@ -125,29 +111,50 @@ export class InstanceService {
       deployment.spec.template.metadata.labels,
     )
     const appsV1Api = this.cluster.makeAppsV1Api(region)
-    const namespace = GetApplicationNamespaceByAppId(appid)
-    const res = await appsV1Api.replaceNamespacedDeployment(
+    const namespace = GetApplicationNamespace(region, appid)
+    const deploymentResult = await appsV1Api.replaceNamespacedDeployment(
       app.appid,
       namespace,
       deployment,
     )
 
-    this.logger.log(`restart k8s deployment ${res.body?.metadata?.name}`)
+    this.logger.log(
+      `restart k8s deployment ${deploymentResult.body?.metadata?.name}`,
+    )
+
+    // reapply service
+    service.spec = this.makeServiceSpec(
+      deployment.spec.template.metadata.labels,
+    )
+    const coreV1Api = this.cluster.makeCoreV1Api(region)
+    const serviceResult = await coreV1Api.replaceNamespacedService(
+      service.metadata.name,
+      namespace,
+      service,
+    )
+
+    this.logger.log(`restart k8s service ${serviceResult.body?.metadata?.name}`)
 
     // reapply hpa when application is restarted
     await this.reapplyHorizontalPodAutoscaler(app, hpa)
   }
 
-  private async createDeployment(app: ApplicationWithRelations, labels: any) {
+  private async createDeployment(
+    app: ApplicationWithRelations,
+    labels: Record<string, string>,
+  ) {
     const appid = app.appid
-    const namespace = GetApplicationNamespaceByAppId(appid)
+    const region = app.region
+    assert(region, 'region is required')
+
+    const namespace = GetApplicationNamespace(region, appid)
 
     // create deployment
     const data = new V1Deployment()
     data.metadata = { name: app.appid, labels }
     data.spec = await this.makeDeploymentSpec(app, labels)
 
-    const appsV1Api = this.cluster.makeAppsV1Api(app.region)
+    const appsV1Api = this.cluster.makeAppsV1Api(region)
     const res = await appsV1Api.createNamespacedDeployment(namespace, data)
 
     this.logger.log(`create k8s deployment ${res.body?.metadata?.name}`)
@@ -155,17 +162,20 @@ export class InstanceService {
     return res.body
   }
 
-  private async createService(app: ApplicationWithRelations, labels: any) {
-    const namespace = GetApplicationNamespaceByAppId(app.appid)
+  private async createService(
+    app: ApplicationWithRelations,
+    labels: Record<string, string>,
+  ) {
+    const region = app.region
+    assert(region, 'region is required')
+
+    const namespace = GetApplicationNamespace(region, app.appid)
     const serviceName = app.appid
-    const coreV1Api = this.cluster.makeCoreV1Api(app.region)
+    const coreV1Api = this.cluster.makeCoreV1Api(region)
+    const spec = this.makeServiceSpec(labels)
     const res = await coreV1Api.createNamespacedService(namespace, {
       metadata: { name: serviceName, labels },
-      spec: {
-        selector: labels,
-        type: 'ClusterIP',
-        ports: [{ port: 8000, targetPort: 8000, protocol: 'TCP' }],
-      },
+      spec: spec,
     })
     this.logger.log(`create k8s service ${res.body?.metadata?.name}`)
     return res.body
@@ -173,9 +183,12 @@ export class InstanceService {
 
   private async getDeployment(app: ApplicationWithRelations) {
     const appid = app.appid
-    const appsV1Api = this.cluster.makeAppsV1Api(app.region)
+    const region = app.region
+    assert(region, 'region is required')
+
+    const appsV1Api = this.cluster.makeAppsV1Api(region)
     try {
-      const namespace = GetApplicationNamespaceByAppId(appid)
+      const namespace = GetApplicationNamespace(region, appid)
       const res = await appsV1Api.readNamespacedDeployment(appid, namespace)
       return res.body
     } catch (error) {
@@ -186,11 +199,13 @@ export class InstanceService {
 
   private async getService(app: ApplicationWithRelations) {
     const appid = app.appid
-    const coreV1Api = this.cluster.makeCoreV1Api(app.region)
+    const region = app.region
+    assert(region, 'region is required')
 
+    const coreV1Api = this.cluster.makeCoreV1Api(region)
     try {
       const serviceName = appid
-      const namespace = GetApplicationNamespaceByAppId(appid)
+      const namespace = GetApplicationNamespace(region, appid)
       const res = await coreV1Api.readNamespacedService(serviceName, namespace)
       return res.body
     } catch (error) {
@@ -199,10 +214,26 @@ export class InstanceService {
     }
   }
 
+  private makeServiceSpec(labels: Record<string, string>) {
+    const spec: V1ServiceSpec = {
+      selector: labels,
+      type: 'ClusterIP',
+      ports: [
+        { port: 8000, targetPort: 8000, protocol: 'TCP', name: 'http' },
+        { port: 9000, targetPort: 9000, protocol: 'TCP', name: 'storage' },
+      ],
+    }
+    return spec
+  }
+
   private async makeDeploymentSpec(
     app: ApplicationWithRelations,
-    labels: any,
+    labels: Record<string, string>,
   ): Promise<V1DeploymentSpec> {
+    const appid = app.appid
+    const region = app.region
+    assert(region, 'region is required')
+
     // prepare params
     const limitMemory = app.bundle.resource.limitMemory
     const limitCpu = app.bundle.resource.limitCPU
@@ -212,38 +243,58 @@ export class InstanceService {
     const max_http_header_size = 1 * MB
     const dependencies = app.configuration?.dependencies || []
     const dependencies_string = dependencies.join(' ')
-    const npm_install_flags = app.region.clusterConf.npmInstallFlags || ''
+    const npm_install_flags = region.clusterConf.npmInstallFlags || ''
 
     // db connection uri
-    const database = await this.databaseService.findOne(app.appid)
-    const dbConnectionUri = this.databaseService.getInternalConnectionUri(
-      app.region,
-      database,
-    )
+    let dbConnectionUri: string
+    const dedicatedDatabase = await this.dedicatedDatabaseService.findOne(appid)
+    if (dedicatedDatabase) {
+      dbConnectionUri = await this.dedicatedDatabaseService.getConnectionUri(
+        region,
+        dedicatedDatabase,
+      )
+    } else {
+      const database = await this.databaseService.findOne(appid)
+      dbConnectionUri = this.databaseService.getInternalConnectionUri(
+        region,
+        database,
+      )
+    }
 
-    const storage = await this.storageService.findOne(app.appid)
+    const storage = await this.storageService.findOne(appid)
+    const NODE_MODULES_PUSH_URL =
+      await this.cloudbin.getNodeModulesCachePushUrl(appid)
+
+    const NODE_MODULES_PULL_URL =
+      await this.cloudbin.getNodeModulesCachePullUrl(appid)
 
     const env = [
       { name: 'DB_URI', value: dbConnectionUri },
-      { name: 'APP_ID', value: app.appid }, // deprecated, use `APPID` instead
-      { name: 'APPID', value: app.appid },
+      { name: 'APP_ID', value: appid }, // deprecated, use `APPID` instead
+      { name: 'APPID', value: appid },
       { name: 'OSS_ACCESS_KEY', value: storage.accessKey },
       { name: 'OSS_ACCESS_SECRET', value: storage.secretKey },
       {
         name: 'OSS_INTERNAL_ENDPOINT',
-        value: app.region.storageConf.internalEndpoint,
+        value: region.storageConf.internalEndpoint,
       },
       {
         name: 'OSS_EXTERNAL_ENDPOINT',
-        value: app.region.storageConf.externalEndpoint,
+        value: region.storageConf.externalEndpoint,
       },
-      { name: 'OSS_REGION', value: app.region.name },
+      { name: 'OSS_REGION', value: region.name },
       {
         name: 'FLAGS',
         value: `--max_old_space_size=${max_old_space_size} --max-http-header-size=${max_http_header_size}`,
       },
       { name: 'DEPENDENCIES', value: dependencies_string },
+      { name: 'NODE_MODULES_PUSH_URL', value: NODE_MODULES_PUSH_URL },
+      { name: 'NODE_MODULES_PULL_URL', value: NODE_MODULES_PULL_URL },
       { name: 'NPM_INSTALL_FLAGS', value: npm_install_flags },
+      {
+        name: 'CUSTOM_DEPENDENCY_BASE_PATH',
+        value: ServerConfig.RUNTIME_CUSTOM_DEPENDENCY_BASE_PATH,
+      },
       {
         name: 'RESTART_AT',
         value: new Date().getTime().toString(),
@@ -269,14 +320,18 @@ export class InstanceService {
         spec: {
           terminationGracePeriodSeconds: 10,
           automountServiceAccountToken: false,
+          enableServiceLinks: false,
           containers: [
             {
               image: app.runtime.image.main,
               imagePullPolicy: 'IfNotPresent',
               command: ['sh', '/app/start.sh'],
-              name: app.appid,
+              name: appid,
               env,
-              ports: [{ containerPort: 8000, name: 'http' }],
+              ports: [
+                { containerPort: 8000, name: 'http' },
+                { containerPort: 9000, name: 'storage' },
+              ],
               resources: {
                 limits: {
                   cpu: `${limitCpu}m`,
@@ -292,7 +347,7 @@ export class InstanceService {
               volumeMounts: [
                 {
                   name: 'app',
-                  mountPath: '/app',
+                  mountPath: `${ServerConfig.RUNTIME_CUSTOM_DEPENDENCY_BASE_PATH}/node_modules/`,
                 },
               ],
               startupProbe: {
@@ -321,6 +376,9 @@ export class InstanceService {
                 allowPrivilegeEscalation: false,
                 readOnlyRootFilesystem: false,
                 privileged: false,
+                capabilities: {
+                  drop: ['ALL'],
+                },
               },
             },
           ],
@@ -334,7 +392,7 @@ export class InstanceService {
               volumeMounts: [
                 {
                   name: 'app',
-                  mountPath: '/tmp/app',
+                  mountPath: '/app/node_modules/',
                 },
               ],
               resources: {
@@ -364,39 +422,38 @@ export class InstanceService {
               },
             },
           ],
-          affinity: {
-            nodeAffinity: {
-              // required to schedule on runtime node
-              requiredDuringSchedulingIgnoredDuringExecution: {
-                nodeSelectorTerms: [
-                  {
-                    matchExpressions: [
-                      {
-                        key: LABEL_KEY_NODE_TYPE,
-                        operator: 'In',
-                        values: [NodeType.Runtime],
-                      },
-                    ],
-                  },
-                ],
-              },
-            }, // end of nodeAffinity {}
-          }, // end of affinity {}
+          securityContext: {
+            runAsUser: 1000, // node
+            runAsGroup: 2000,
+            runAsNonRoot: true,
+            fsGroup: 2000,
+            seccompProfile: {
+              type: 'RuntimeDefault',
+            },
+          },
         }, // end of spec {}
       }, // end of template {}
     }
+
+    if (region.clusterConf.runtimeAffinity) {
+      spec.template.spec.affinity = region.clusterConf.runtimeAffinity
+    }
+
     return spec
   }
 
   private async createHorizontalPodAutoscaler(
     app: ApplicationWithRelations,
-    labels: any,
+    labels: Record<string, string>,
   ) {
     if (!app.bundle.autoscaling.enable) return null
 
+    const region = app.region
+    assert(region, 'region is required')
+
     const spec = this.makeHorizontalPodAutoscalerSpec(app)
-    const hpaV2Api = this.cluster.makeHorizontalPodAutoscalingV2Api(app.region)
-    const namespace = GetApplicationNamespaceByAppId(app.appid)
+    const hpaV2Api = this.cluster.makeHorizontalPodAutoscalingV2Api(region)
+    const namespace = GetApplicationNamespace(region, app.appid)
     const res = await hpaV2Api.createNamespacedHorizontalPodAutoscaler(
       namespace,
       {
@@ -415,11 +472,14 @@ export class InstanceService {
 
   private async getHorizontalPodAutoscaler(app: ApplicationWithRelations) {
     const appid = app.appid
-    const hpaV2Api = this.cluster.makeHorizontalPodAutoscalingV2Api(app.region)
+    const region = app.region
+    assert(region, 'region is required')
+
+    const hpaV2Api = this.cluster.makeHorizontalPodAutoscalingV2Api(region)
 
     try {
       const hpaName = appid
-      const namespace = GetApplicationNamespaceByAppId(appid)
+      const namespace = GetApplicationNamespace(region, appid)
       const res = await hpaV2Api.readNamespacedHorizontalPodAutoscaler(
         hpaName,
         namespace,
@@ -448,7 +508,7 @@ export class InstanceService {
           name: 'cpu',
           target: {
             type: 'Utilization',
-            averageUtilization: targetCPUUtilizationPercentage,
+            averageUtilization: targetCPUUtilizationPercentage * 10,
           },
         },
       })
@@ -461,7 +521,7 @@ export class InstanceService {
           name: 'memory',
           target: {
             type: 'Utilization',
-            averageUtilization: targetMemoryUtilizationPercentage,
+            averageUtilization: targetMemoryUtilizationPercentage * 2,
           },
         },
       })
@@ -500,13 +560,16 @@ export class InstanceService {
     return spec
   }
 
-  private async reapplyHorizontalPodAutoscaler(
+  public async reapplyHorizontalPodAutoscaler(
     app: ApplicationWithRelations,
     oldHpa: V2HorizontalPodAutoscaler,
   ) {
-    const { region, appid } = app
+    const appid = app.appid
+    const region = app.region
+    assert(region, 'region is required')
+
     const hpaV2Api = this.cluster.makeHorizontalPodAutoscalingV2Api(region)
-    const namespace = GetApplicationNamespaceByAppId(appid)
+    const namespace = GetApplicationNamespace(region, appid)
 
     const hpa = oldHpa
 
@@ -526,10 +589,21 @@ export class InstanceService {
           hpa,
         )
       } else {
-        const labels = { [LABEL_KEY_APP_ID]: appid }
+        const labels = this.getRuntimeLabel(appid)
         await this.createHorizontalPodAutoscaler(app, labels)
       }
       this.logger.log(`reapply k8s hpa ${app.appid}`)
     }
+  }
+
+  private getRuntimeLabel(appid: string) {
+    const SEALOS = 'cloud.sealos.io/app-deploy-manager'
+    const labels: Record<string, string> = {
+      [LABEL_KEY_APP_ID]: appid,
+      [SEALOS]: appid,
+      app: appid,
+    }
+
+    return labels
   }
 }

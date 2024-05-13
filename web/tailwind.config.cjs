@@ -95,7 +95,7 @@ module.exports = {
         },
         error: {
           100: "#FDECEE",
-          200: "#FDD8DC",
+          200: "#FFD6DB",
           400: "#FF8492",
           500: "#F16979",
           600: "#ED4458",
@@ -117,6 +117,7 @@ module.exports = {
           700: "#7167AA",
         },
         adora: {
+          100: "#F2F1FB",
           200: "#E6E3F7",
           600: "#8172D8",
         },
@@ -130,6 +131,8 @@ module.exports = {
         frostyNightfall: {
           200: "#EAEBF0",
           300: "#D5D6E1",
+          600: "#9699B4",
+          700: "#787A90",
         },
       },
     },

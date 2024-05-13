@@ -5,10 +5,10 @@ import {
   Patch,
   Param,
   UseGuards,
-  Req,
   Logger,
   Post,
   Delete,
+  ForbiddenException,
 } from '@nestjs/common'
 import {
   ApiBearerAuth,
@@ -16,7 +16,6 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger'
-import { IRequest } from '../utils/interface'
 import { JwtAuthGuard } from '../authentication/jwt.auth.guard'
 import {
   ApiResponseArray,
@@ -49,6 +48,14 @@ import { ResourceService } from 'src/billing/resource.service'
 import { RuntimeDomainService } from 'src/gateway/runtime-domain.service'
 import { BindCustomDomainDto } from 'src/website/dto/update-website.dto'
 import { RuntimeDomain } from 'src/gateway/entities/runtime-domain'
+import { GroupRole, getRoleLevel } from 'src/group/entities/group-member'
+import { GroupRoles } from 'src/group/group-role.decorator'
+import { InjectApplication, InjectGroup, InjectUser } from 'src/utils/decorator'
+import { User } from 'src/user/entities/user'
+import { GroupWithRole } from 'src/group/entities/group'
+import { isEqual } from 'lodash'
+import { InstanceService } from 'src/instance/instance.service'
+import { QuotaService } from 'src/user/quota.service'
 
 @ApiTags('Application')
 @Controller('applications')
@@ -58,12 +65,14 @@ export class ApplicationController {
 
   constructor(
     private readonly application: ApplicationService,
+    private readonly instance: InstanceService,
     private readonly fn: FunctionService,
     private readonly region: RegionService,
     private readonly storage: StorageService,
     private readonly account: AccountService,
     private readonly resource: ResourceService,
     private readonly runtimeDomain: RuntimeDomainService,
+    private readonly quotaServiceTsService: QuotaService,
   ) {}
 
   /**
@@ -73,18 +82,14 @@ export class ApplicationController {
   @ApiOperation({ summary: 'Create application' })
   @ApiResponseObject(ApplicationWithRelations)
   @Post()
-  async create(@Req() req: IRequest, @Body() dto: CreateApplicationDto) {
-    const error = dto.autoscaling.validate()
+  async create(@Body() dto: CreateApplicationDto, @InjectUser() user: User) {
+    const error = dto.validate() || dto.autoscaling.validate()
     if (error) {
       return ResponseUtil.error(error)
     }
 
-    const user = req.user
-
     // check regionId exists
-    const region = await this.region.findOneDesensitized(
-      new ObjectId(dto.regionId),
-    )
+    const region = await this.region.findOne(new ObjectId(dto.regionId))
     if (!region) {
       return ResponseUtil.error(`region ${dto.regionId} not found`)
     }
@@ -97,10 +102,11 @@ export class ApplicationController {
       return ResponseUtil.error(`runtime ${dto.runtimeId} not found`)
     }
 
+    const regionId = region._id
+
     // check if trial tier
     const isTrialTier = await this.resource.isTrialBundle(dto)
     if (isTrialTier) {
-      const regionId = new ObjectId(dto.regionId)
       const bundle = await this.resource.findTrialBundle(regionId)
       const trials = await this.application.findTrialApplications(user._id)
       const limitOfFreeTier = bundle?.limitCountOfFreeTierPerUser || 0
@@ -111,10 +117,21 @@ export class ApplicationController {
       }
     }
 
-    // one user can only have 20 applications in one region
-    const count = await this.application.countByUser(user._id)
-    if (count > 20) {
-      return ResponseUtil.error(`too many applications, limit is 20`)
+    if (
+      dto.dedicatedDatabase &&
+      !region.databaseConf.dedicatedDatabase.enabled
+    ) {
+      return ResponseUtil.error('dedicated database is not enabled')
+    }
+
+    // check if a user exceeds the resource limit in a region
+    const limitResource = await this.quotaServiceTsService.resourceLimit(
+      user._id,
+      dto.cpu,
+      dto.memory,
+    )
+    if (limitResource) {
+      return ResponseUtil.error(limitResource)
     }
 
     // check account balance
@@ -124,9 +141,14 @@ export class ApplicationController {
       return ResponseUtil.error(`account balance is not enough`)
     }
 
+    const checkSpec = await this.checkResourceSpecification(dto, regionId)
+    if (!checkSpec) {
+      return ResponseUtil.error('invalid resource specification')
+    }
+
     // create application
     const appid = await this.application.tryGenerateUniqueAppid()
-    await this.application.create(user._id, appid, dto, isTrialTier)
+    await this.application.create(regionId, user._id, appid, dto, isTrialTier)
 
     const app = await this.application.findOne(appid)
     return ResponseUtil.ok(app)
@@ -141,8 +163,7 @@ export class ApplicationController {
   @Get()
   @ApiOperation({ summary: 'Get user application list' })
   @ApiResponseArray(ApplicationWithRelations)
-  async findAll(@Req() req: IRequest) {
-    const user = req.user
+  async findAll(@InjectUser() user: User) {
     const data = await this.application.findAllByUser(user._id)
     return ResponseUtil.ok(data)
   }
@@ -166,17 +187,8 @@ export class ApplicationController {
     let storage = {}
     const storageUser = await this.storage.findOne(appid)
     if (storageUser) {
-      const sts = await this.storage.getOssSTS(region, appid, storageUser)
-      const credentials = {
-        endpoint: region.storageConf.externalEndpoint,
-        accessKeyId: sts.Credentials?.AccessKeyId,
-        secretAccessKey: sts.Credentials?.SecretAccessKey,
-        sessionToken: sts.Credentials?.SessionToken,
-        expiration: sts.Credentials?.Expiration,
-      }
-
       storage = {
-        credentials,
+        endpoint: region.storageConf.externalEndpoint,
         ...storageUser,
       }
     }
@@ -188,15 +200,22 @@ export class ApplicationController {
       'develop',
       expires,
     )
+    const openapi_token = await this.fn.generateRuntimeToken(
+      appid,
+      'openapi',
+      expires,
+    )
 
     const res = {
       ...data,
       storage: storage,
       port: region.gatewayConf.port,
       develop_token: develop_token,
+      openapi_token: openapi_token,
 
       /** This is the redundant field of Region */
-      tls: region.tls,
+      tls: region.gatewayConf.tls.enabled,
+      dedicatedDatabase: region.databaseConf.dedicatedDatabase.enabled,
     }
 
     return ResponseUtil.ok(res)
@@ -207,6 +226,7 @@ export class ApplicationController {
    */
   @ApiOperation({ summary: 'Update application name' })
   @ApiResponseObject(Application)
+  @GroupRoles(GroupRole.Admin)
   @UseGuards(JwtAuthGuard, ApplicationAuthGuard)
   @Patch(':appid/name')
   async updateName(
@@ -227,13 +247,16 @@ export class ApplicationController {
   async updateState(
     @Param('appid') appid: string,
     @Body() dto: UpdateApplicationStateDto,
-    @Req() req: IRequest,
+    @InjectApplication() app: Application,
+    @InjectGroup() group: GroupWithRole,
   ) {
-    const app = req.application
-    const user = req.user
+    if (dto.state === ApplicationState.Deleted) {
+      throw new ForbiddenException('cannot update state to deleted')
+    }
+    const userid = app.createdBy
 
     // check account balance
-    const account = await this.account.findOne(user._id)
+    const account = await this.account.findOne(userid)
     const balance = account?.balance || 0
     if (balance < 0) {
       return ResponseUtil.error(`account balance is not enough`)
@@ -272,6 +295,15 @@ export class ApplicationController {
       )
     }
 
+    if (
+      [ApplicationState.Stopped, ApplicationState.Running].includes(
+        dto.state,
+      ) &&
+      getRoleLevel(group.role) < getRoleLevel(GroupRole.Admin)
+    ) {
+      return ResponseUtil.error('no permission')
+    }
+
     const doc = await this.application.updateState(appid, dto.state)
     return ResponseUtil.ok(doc)
   }
@@ -281,20 +313,21 @@ export class ApplicationController {
    */
   @ApiOperation({ summary: 'Update application bundle' })
   @ApiResponseObject(ApplicationBundle)
+  @GroupRoles(GroupRole.Admin)
   @UseGuards(JwtAuthGuard, ApplicationAuthGuard)
   @Patch(':appid/bundle')
   async updateBundle(
     @Param('appid') appid: string,
     @Body() dto: UpdateApplicationBundleDto,
-    @Req() req: IRequest,
+    @InjectApplication() app: ApplicationWithRelations,
+    @InjectUser() user: User,
   ) {
     const error = dto.autoscaling.validate()
     if (error) {
       return ResponseUtil.error(error)
     }
 
-    const app = await this.application.findOne(appid)
-    const user = req.user
+    const userid = app.createdBy
     const regionId = app.regionId
 
     // check if trial tier
@@ -304,7 +337,7 @@ export class ApplicationController {
     })
     if (isTrialTier) {
       const bundle = await this.resource.findTrialBundle(regionId)
-      const trials = await this.application.findTrialApplications(user._id)
+      const trials = await this.application.findTrialApplications(userid)
       const limitOfFreeTier = bundle?.limitCountOfFreeTierPerUser || 0
       if (trials.length >= (limitOfFreeTier || 0)) {
         return ResponseUtil.error(
@@ -313,16 +346,88 @@ export class ApplicationController {
       }
     }
 
+    const origin = app.bundle
+    if (
+      (origin.resource.dedicatedDatabase?.limitCPU && dto.databaseCapacity) ||
+      (origin.resource.databaseCapacity && dto.dedicatedDatabase?.cpu)
+    ) {
+      return ResponseUtil.error('cannot change database type')
+    }
+
+    const checkSpec = await this.checkResourceSpecification(dto, regionId)
+    if (!checkSpec) {
+      return ResponseUtil.error('invalid resource specification')
+    }
+
+    if (
+      dto.dedicatedDatabase?.capacity &&
+      origin.resource.dedicatedDatabase?.capacity &&
+      dto.dedicatedDatabase?.capacity <
+        origin.resource.dedicatedDatabase?.capacity
+    ) {
+      return ResponseUtil.error('cannot reduce database capacity')
+    }
+
+    if (
+      dto.dedicatedDatabase?.replicas &&
+      origin.resource.dedicatedDatabase?.replicas &&
+      dto.dedicatedDatabase?.replicas !==
+        origin.resource.dedicatedDatabase?.replicas
+    ) {
+      return ResponseUtil.error('cannot change database replicas')
+    }
+
+    // check if a user exceeds the resource limit in a region
+    const limitResource = await this.quotaServiceTsService.resourceLimit(
+      user._id,
+      dto.cpu,
+      dto.memory,
+      appid,
+    )
+    if (limitResource) {
+      return ResponseUtil.error(limitResource)
+    }
+
     const doc = await this.application.updateBundle(appid, dto, isTrialTier)
 
     // restart running application if cpu or memory changed
-    const origin = app.bundle
     const isRunning = app.phase === ApplicationPhase.Started
     const isCpuChanged = origin.resource.limitCPU !== doc.resource.limitCPU
     const isMemoryChanged =
       origin.resource.limitMemory !== doc.resource.limitMemory
+    const isAutoscalingCanceled =
+      !doc.autoscaling.enable && origin.autoscaling.enable
+    const isDedicatedDatabaseChanged =
+      !!origin.resource.dedicatedDatabase &&
+      (!isEqual(
+        origin.resource.dedicatedDatabase.limitCPU,
+        doc.resource.dedicatedDatabase.limitCPU,
+      ) ||
+        !isEqual(
+          origin.resource.dedicatedDatabase.limitMemory,
+          doc.resource.dedicatedDatabase.limitMemory,
+        ) ||
+        !isEqual(
+          origin.resource.dedicatedDatabase.replicas,
+          doc.resource.dedicatedDatabase.replicas,
+        ) ||
+        !isEqual(
+          origin.resource.dedicatedDatabase.capacity,
+          doc.resource.dedicatedDatabase.capacity,
+        ))
 
-    if (isRunning && (isCpuChanged || isMemoryChanged)) {
+    if (!isEqual(doc.autoscaling, origin.autoscaling)) {
+      const { hpa, app } = await this.instance.get(appid)
+      await this.instance.reapplyHorizontalPodAutoscaler(app, hpa)
+    }
+
+    if (
+      isRunning &&
+      (isCpuChanged ||
+        isMemoryChanged ||
+        isAutoscalingCanceled ||
+        isDedicatedDatabaseChanged)
+    ) {
       await this.application.updateState(appid, ApplicationState.Restarting)
     }
 
@@ -334,6 +439,7 @@ export class ApplicationController {
    */
   @ApiResponseObject(RuntimeDomain)
   @ApiOperation({ summary: 'Bind custom domain to application' })
+  @GroupRoles(GroupRole.Admin)
   @UseGuards(JwtAuthGuard, ApplicationAuthGuard)
   @Patch(':appid/domain')
   async bindDomain(
@@ -368,6 +474,7 @@ export class ApplicationController {
    */
   @ApiResponse({ type: ResponseUtil<boolean> })
   @ApiOperation({ summary: 'Check if domain is resolved' })
+  @GroupRoles(GroupRole.Admin)
   @UseGuards(JwtAuthGuard, ApplicationAuthGuard)
   @Post(':appid/domain/resolved')
   async checkResolved(
@@ -387,6 +494,7 @@ export class ApplicationController {
    */
   @ApiResponseObject(RuntimeDomain)
   @ApiOperation({ summary: 'Remove custom domain of application' })
+  @GroupRoles(GroupRole.Admin)
   @UseGuards(JwtAuthGuard, ApplicationAuthGuard)
   @Delete(':appid/domain')
   async remove(@Param('appid') appid: string) {
@@ -408,11 +516,13 @@ export class ApplicationController {
    */
   @ApiOperation({ summary: 'Delete an application' })
   @ApiResponseObject(Application)
+  @GroupRoles(GroupRole.Owner)
   @UseGuards(JwtAuthGuard, ApplicationAuthGuard)
   @Delete(':appid')
-  async delete(@Param('appid') appid: string, @Req() req: IRequest) {
-    const app = req.application
-
+  async delete(
+    @Param('appid') appid: string,
+    @InjectApplication() app: ApplicationWithRelations,
+  ) {
     // check: only stopped application can be deleted
     if (
       app.state !== ApplicationState.Stopped &&
@@ -423,5 +533,60 @@ export class ApplicationController {
 
     const doc = await this.application.remove(appid)
     return ResponseUtil.ok(doc)
+  }
+
+  private async checkResourceSpecification(
+    dto: UpdateApplicationBundleDto,
+    regionId: ObjectId,
+  ) {
+    const resourceOptions = await this.resource.findAllByRegionId(regionId)
+    const checkSpec = resourceOptions.every((option) => {
+      switch (option.type) {
+        case 'cpu':
+          return option.specs.some((spec) => spec.value === dto.cpu)
+        case 'memory':
+          return option.specs.some((spec) => spec.value === dto.memory)
+        case 'databaseCapacity':
+          if (!dto.databaseCapacity) return true
+          return option.specs.some(
+            (spec) => spec.value === dto.databaseCapacity,
+          )
+        case 'storageCapacity':
+          return option.specs.some((spec) => spec.value === dto.storageCapacity)
+        // dedicated database
+        case 'dedicatedDatabaseCPU':
+          return (
+            !dto.dedicatedDatabase?.cpu ||
+            option.specs.some(
+              (spec) => spec.value === dto.dedicatedDatabase.cpu,
+            )
+          )
+        case 'dedicatedDatabaseMemory':
+          return (
+            !dto.dedicatedDatabase?.memory ||
+            option.specs.some(
+              (spec) => spec.value === dto.dedicatedDatabase.memory,
+            )
+          )
+        case 'dedicatedDatabaseCapacity':
+          return (
+            !dto.dedicatedDatabase?.capacity ||
+            option.specs.some(
+              (spec) => spec.value === dto.dedicatedDatabase.capacity,
+            )
+          )
+        case 'dedicatedDatabaseReplicas':
+          return (
+            !dto.dedicatedDatabase?.replicas ||
+            option.specs.some(
+              (spec) => spec.value === dto.dedicatedDatabase.replicas,
+            )
+          )
+        default:
+          return true
+      }
+    })
+
+    return checkSpec
   }
 }

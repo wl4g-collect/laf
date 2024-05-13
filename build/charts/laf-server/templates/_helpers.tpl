@@ -43,10 +43,30 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
 {{/*
+Common labels
+*/}}
+{{- define "runtime-exporter.labels" -}}
+helm.sh/chart: {{ include "laf-server.chart" . }}
+{{ include "runtime-exporter.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+{{- end }}
+
+{{/*
 Selector labels
 */}}
 {{- define "laf-server.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "laf-server.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Selector labels
+*/}}
+{{- define "runtime-exporter.selectorLabels" -}}
+app.kubernetes.io/name: runtime-exporter
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 

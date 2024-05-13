@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common'
 import { MongoClient } from 'mongodb'
 import * as assert from 'node:assert'
 import { Region } from 'src/region/entities/region'
+import { DatabasePermission } from './entities/database'
 
 @Injectable()
 export class MongoService {
@@ -22,14 +23,14 @@ export class MongoService {
     password: string,
   ) {
     const conf = region.databaseConf
-    const client = new MongoClient(conf.connectionUri)
+    const client = new MongoClient(conf.controlConnectionUri)
 
     try {
       await client.connect()
       const db = client.db(name)
       const result = await db.addUser(username, password, {
         roles: [
-          { role: 'readWrite', db: name },
+          { role: DatabasePermission.ReadWrite, db: name },
           { role: 'dbAdmin', db: name },
         ],
       })
@@ -50,7 +51,7 @@ export class MongoService {
    */
   async deleteDatabase(region: Region, name: string) {
     const conf = region.databaseConf
-    const client = new MongoClient(conf.connectionUri)
+    const client = new MongoClient(conf.controlConnectionUri)
 
     try {
       await client.connect()

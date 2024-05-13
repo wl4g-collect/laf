@@ -12,28 +12,53 @@ import { parseToken, splitBearerToken } from './support/token'
 import Config from './config'
 import { router } from './handler/router'
 import { logger } from './support/logger'
-import { generateUUID } from './support/utils'
+import { GetClientIPFromRequest, generateUUID } from './support/utils'
 import { WebSocketAgent } from './support/ws'
 import { DatabaseAgent } from './db'
 import xmlparser from 'express-xml-bodyparser'
 
 // init static method of class
 import './support/cloud-sdk'
-import { FunctionCache } from './support/function-engine/cache'
-import { DatabaseChangeStream } from './support/db-change-stream'
-import { ensureCollectionIndexes } from './support/function-log'
+import storageServer from './storage-server'
+import { DatabaseChangeStream } from './support/database-change-stream'
+import url from 'url'
+
+import { LspWebSocket } from './support/lsp'
+import { createCloudSdk } from './support/cloud-sdk'
+import { FunctionCache } from './support/engine'
+
+require('source-map-support').install({
+  emptyCacheBetweenOperations: true,
+  overrideRetrieveFile: true,
+  retrieveFile: (path) => FunctionCache.get(path)?.source.compiled,
+})
+
+// hack: set createCloudSdk to global object to make it available in @lafjs/cloud package
+globalThis.createCloudSdk = createCloudSdk
 
 const app = express()
 
-DatabaseAgent.accessor.ready.then(() => {
-  ensureCollectionIndexes()
-  FunctionCache.initialize()
+DatabaseAgent.ready.then(() => {
   DatabaseChangeStream.initialize()
 })
 
-if (process.env.NODE_ENV === 'development') {
-  app.use(cors())
-}
+app.use(
+  cors({
+    origin: true,
+    methods: '*',
+    exposedHeaders: '*',
+    credentials: true,
+    maxAge: 86400,
+  }),
+)
+
+// fix x-real-ip while gateway not set
+app.use((req, _res, next) => {
+  if (!req.headers['x-real-ip']) {
+    req.headers['x-real-ip'] = GetClientIPFromRequest(req)
+  }
+  next()
+})
 
 app.use(express.json({ limit: Config.REQUEST_LIMIT_SIZE }) as any)
 app.use(
@@ -68,18 +93,6 @@ app.use(function (req, res, next) {
 
   const requestId = (req['requestId'] =
     req.headers['x-request-id'] || generateUUID())
-  if (req.url !== '/_/healthz') {
-    logger.info(
-      requestId,
-      `${req.method} "${req.url}" - referer: ${req.get('referer') || '-'
-      } ${req.get('user-agent')}`,
-    )
-    logger.trace(requestId, `${req.method} ${req.url}`, {
-      body: req.body,
-      headers: req.headers,
-      auth,
-    })
-  }
   res.set('request-id', requestId)
   next()
 })
@@ -94,6 +107,12 @@ const server = app.listen(Config.PORT, () =>
  * WebSocket upgrade & connect
  */
 server.on('upgrade', (req, socket, head) => {
+  const pathname = req.url ? url.parse(req.url).pathname : undefined
+  if (pathname === '/_/lsp') {
+    LspWebSocket.handleUpgrade(req, socket, head)
+    return
+  }
+
   WebSocketAgent.server.handleUpgrade(req, socket as any, head, (client) => {
     WebSocketAgent.server.emit('connection', client, req)
   })
@@ -104,8 +123,9 @@ process.on('SIGINT', gracefullyExit)
 
 async function gracefullyExit() {
   await DatabaseAgent.accessor.close()
-  server.close(async () => {
-    logger.info('process gracefully exited!')
-    process.exit(0)
-  })
+  await server.close()
+  await storageServer.close()
+
+  logger.info('process gracefully exited!')
+  process.exit(0)
 }
